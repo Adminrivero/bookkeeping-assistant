@@ -1,0 +1,12 @@
+# Ignore common Python build/environment files
+cs50p_venv/
+.vscode/
+venv/
+
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+
+# Ignore business logic files
+data/
+output/
