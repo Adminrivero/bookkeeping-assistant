@@ -1,5 +1,9 @@
 # 🧾 Bookkeeping Assistant
 
+#### Video Demo: [URL HERE]()
+
+#### Description:
+
 A modular Python tool designed to automate the classification and export of financial transactions for small business bookkeeping. Built as the final project for CS50's Introduction to Programming with Python, this assistant streamlines the yearly chore of organizing bank and credit card statements into a structured spreadsheet using rule-based logic.
 
 ## 🎯 Features
@@ -42,11 +46,48 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_classify.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── test_export.py<br>
 
+## 🧩 Module Breakdown
+
+`project.py`
+- Application entry point, contains main() function
+- Uses `argparse` to specify year, input files, or mode (e.g., dry-run vs export
+
+`config/allocation_rules.json`
+- Stores classification rules (merchant keywords, thresholds, categories)
+- Easy to update without touching code
+
+`src/ingest.py`
+- Reads and normalizes CSV/Excel files
+- Cleans column names, parses dates, standardizes formats
+
+`src/classify.py`
+- Core rule engine
+- Uses OOP: `TransactionClassifier` class
+- Applies rules from `allocation_rules.json` to each transaction
+- Flags ambiguous entries for manual review
+
+`src/export.py`
+- Builds final spreadsheet using `openpyxl` or `xlsxwriter`
+- Adds formulas, summary sheets, formatting
+
+`src/utils.py`
+- Helper functions: logging, fuzzy matching, regex parsing
+
+`src/models.py`
+- Defines `Transaction` dataclass
+- Optional: `Account`, `Statement`, or `ClassificationResult` classes
+
+`tests/`
+- Unit tests for each module
+- Use `unittest` or `pytest`
+
 
 ## ✅ CS50P Requirements
 
 - Contains a `main()` function inside `project.py`
 - Includes at least three additional functions with corresponding `pytest` tests
+- Contains a `test_project.py` with the test functions for those additional functions within `project.py`
+- Contains a requirements.txt with the pip-installable libraries required by the project
 - Demonstrates modular design, OOP, error handling, and CLI usage
 
 ## 🚀 Getting Started
