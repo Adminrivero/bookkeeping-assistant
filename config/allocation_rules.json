@@ -1,0 +1,6 @@
+{
+    "_name": "allocation rules for transactions",
+    "_description": "This file contains allocation rules for different types of transactions.",
+    "_scope": ["chequing_account", "savings_account", "credit_card"],
+    "_rules": []
+}

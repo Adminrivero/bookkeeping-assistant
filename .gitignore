@@ -8,5 +8,5 @@ __pycache__/
 *.pyc
 
 # Ignore business logic files
-data/
-output/
+data/*
+output/*
