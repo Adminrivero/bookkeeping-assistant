@@ -28,7 +28,7 @@ bookkeeping-assistant/<br>
 ├── requirements.txt<br>
 ├── project.py &nbsp;&nbsp; # Main entry point with main() and core functions<br>
 ├── config/<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── rules.json &nbsp;&nbsp; # Classification rules<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── allocation_rules.json &nbsp;&nbsp; # Classification rules<br>
 ├── data/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── raw/ &nbsp;&nbsp; # Input files (checking, credit cards)<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── processed/ &nbsp;&nbsp; # Cleaned and categorized files<br>
@@ -108,8 +108,8 @@ pytest tests/
 
 ## 📌 Notes
 
-- Classification rules can be updated in config/rules.json
+- Classification rules can be updated in config/allocation_rules.json
 - Ambiguous transactions will be flagged for manual review
-- Future enhancements may include fuzzy matching and ML-based classificatio
+- Future enhancements may include fuzzy matching and ML-based classification
 
 
