@@ -63,6 +63,32 @@
         "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
         "APPLY_PERCENTAGE": 1.0
       }
+    },
+    {
+      "category_name": "Bank Fees - Monthly Account Fee",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "EQUALS", "value": "MONTHLY ACCOUNT FEE" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Bank Fees", "letter": "P" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
+    },
+    {
+      "category_name": "Bank Fees - Account Rebate",
+      "transaction_type": "INCOME_TO_OFFSET_EXPENSE",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "EQUALS", "value": "ACCT BAL REBATE" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Bank Fees", "letter": "P" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": -1.0
+      }
     }
   ]
 }
