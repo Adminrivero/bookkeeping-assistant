@@ -89,6 +89,34 @@
         "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
         "APPLY_PERCENTAGE": -1.0
       }
+    },
+    {
+      "category_name": "Food/Drink Expenses - Business Meal or Coffee",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ALL",
+      "rules": [
+        { "field": "Description", "operator": "CONTAINS", "value": "TIM HORTONS" },
+        { "field": "Debit", "operator": "LESS_THAN_OR_EQUAL_TO", "value": 50.0 }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Food Expenses from Business Meetings", "letter": "T" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
+    },
+    {
+      "category_name": "Client Gifts - Wine/Spirits/Restaurant/Gift Cards/Baked Goods/Etc.",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "CONTAINS", "value": "LCBO" },
+        { "field": "Description", "operator": "CONTAINS", "value": "RINCON DE ESPAN" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Client Gifts", "letter": "V" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
     }
   ]
 }
