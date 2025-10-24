@@ -117,6 +117,32 @@
         "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
         "APPLY_PERCENTAGE": 1.0
       }
+    },
+    {
+      "category_name": "Manual Review - Outbound E-Transfer",
+      "transaction_type": "MANUAL_CR",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "STARTS_WITH", "value": "SEND E-TFR" }
+      ],
+      "dual_entry": {
+        "CR_COLUMN": { "name": "Withdrawals CR", "letter": "C" },
+        "DR_COLUMN": null,
+        "APPLY_PERCENTAGE": 1.0
+      }
+    },
+    {
+      "category_name": "Manual Review - Inbound E-Transfer (Income Hold)",
+      "transaction_type": "MANUAL_DR",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "STARTS_WITH", "value": "E-TRANSFER" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Deposits DR", "letter": "D" },
+        "CR_COLUMN": null,
+        "APPLY_PERCENTAGE": 1.0
+      }
     }
   ]
 }
