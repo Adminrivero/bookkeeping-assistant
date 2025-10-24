@@ -4,7 +4,9 @@
 
 #### Description:
 
-A modular Python tool designed to automate the classification and export of financial transactions for small business bookkeeping. Built as the final project for CS50's Introduction to Programming with Python, this assistant streamlines the yearly chore of organizing bank and credit card statements into a structured spreadsheet using rule-based logic.
+A modular Python tool designed to automate the classification of financial transactions for small business bookkeeping. Built as a proof-of-concept, this assistant streamlines the yearly chore of organizing transactions from bank accounts and credit card statements into a structured spreadsheet using rule-based logic.
+
+This project involves developing a modular and robust system to manage and automate the allocation of resources based on a set of user-defined rules. The first stable version (v1.0), featuring the initial set of desired features, is specifically suited to meet the requirements for a final project in CS50's Introduction to Programming with Python (CS50P). This system is designed to provide high flexibility and is adaptable to various real-world scenarios. It ensures efficient resource distribution and minimizes manual oversight.
 
 ## 🎯 Features
 
