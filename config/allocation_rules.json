@@ -1,6 +1,7 @@
 {
-    "_name": "allocation rules for transactions",
-    "_description": "This file contains allocation rules for different types of transactions.",
-    "_scope": ["chequing_account", "savings_account", "credit_card"],
-    "_rules": []
+  "_name": "transaction classification rules",
+  "_version": "2025-10-22",
+  "_description": "Ordered rules for automatic transaction categorization.",
+  "_scope": ["chequing_account", "saving_account", "credit_card"],
+  "_rules": []
 }
