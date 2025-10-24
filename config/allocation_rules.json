@@ -3,5 +3,66 @@
   "_version": "2025-10-22",
   "_description": "Ordered rules for automatic transaction categorization.",
   "_scope": ["chequing_account", "saving_account", "credit_card"],
-  "_rules": []
+  "_rules": [
+    {
+      "category_name": "Office Expenses - Retail/Hardware",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "CONTAINS", "value": "THE HOME DEPOT" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Office Expenses", "letter": "I" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
+    },
+    {
+      "category_name": "Vehicle Expenses - Insurance & Services",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "STARTS_WITH", "value": "Economical Ins" },
+        { "field": "Description", "operator": "CONTAINS", "value": "AIR-SERV" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Vehicle Expenses", "letter": "L" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
+    },
+    {
+      "category_name": "Vehicle Expenses - Fuel (Range Based)",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ALL",
+      "rules": [
+        {
+          "group_logic": "MUST_MATCH_ANY",
+          "rules": [
+            { "field": "Description", "operator": "CONTAINS", "value": "ESSO CIRCLE K" },
+            { "field": "Description", "operator": "CONTAINS", "value": "7-ELEVEN" }
+          ]
+        },
+        { "field": "Debit", "operator": "BETWEEN", "value": [20.0, 120.0] }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Vehicle Expenses", "letter": "L" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
+    },
+    {
+      "category_name": "Telephone - Fido Bill",
+      "transaction_type": "EXPENSE",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "CONTAINS", "value": "FIDO" }
+      ],
+      "dual_entry": {
+        "DR_COLUMN": { "name": "Telephone", "letter": "N" },
+        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
+        "APPLY_PERCENTAGE": 1.0
+      }
+    }
+  ]
 }
