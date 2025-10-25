@@ -143,6 +143,33 @@
         "CR_COLUMN": null,
         "APPLY_PERCENTAGE": 1.0
       }
+    },
+    {
+      "category_name": "IGNORE - Internal Transfer/Credit Card Payment",
+      "transaction_type": "IGNORE_TRANSACTION",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "CONTAINS", "value": "TRIANGLE MC" }
+      ]
+    },
+    {
+      "category_name": "Manual Review - Ambiguous Grocery/Retail",
+      "transaction_type": "MANUAL_CR",
+      "logic": "MUST_MATCH_ANY",
+      "rules": [
+        { "field": "Description", "operator": "CONTAINS", "value": "NO FRILLS" },
+        { "field": "Description", "operator": "CONTAINS", "value": "SOBEYS" },
+        { "field": "Description", "operator": "CONTAINS", "value": "COSTCO WHOLESAL" },
+        { "field": "Description", "operator": "CONTAINS", "value": "WALMART STORE" },
+        { "field": "Description", "operator": "CONTAINS", "value": "DOLLARAMA" },
+        { "field": "Description", "operator": "CONTAINS", "value": "ESSO CIRCLE K" },
+        { "field": "Description", "operator": "CONTAINS", "value": "7-ELEVEN" }
+      ],
+      "dual_entry": {
+        "CR_COLUMN": { "name": "Withdrawals CR", "letter": "C" },
+        "DR_COLUMN": null,
+        "APPLY_PERCENTAGE": 1.0
+      }
     }
   ]
 }
