@@ -20,9 +20,9 @@
 
   - Finalize `allocation_rules.json`. (**Done** ✅)
 
-  - Document schema in `README.md`.
+  - Document schema in `README.md`. (**Done** ✅)
 
-  - Add validation logic in `RuleLoader`.
+  - Add validation logic in `RuleLoader`. (**Done** ✅)
 
 ### 📌 Phase 3: Rule Engine Core
 
