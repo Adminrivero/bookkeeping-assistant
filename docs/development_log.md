@@ -30,13 +30,15 @@
 
 - **Tasks:**
 
-  - Implement `RuleLoader` (loads and validates JSON).
+  - Implement `RuleLoader` (loads and validates JSON). (**Done** ✅)
 
-  - Implement `TransactionClassifier` (evaluates rules, applies dual-entry).
+  - Implement `TransactionClassifier` (evaluates rules, applies dual-entry). (**Done** ✅)
 
-  - Add operator functions (`CONTAINS`, `BETWEEN`, etc.).
+  - Add operator functions (`CONTAINS`, `BETWEEN`, etc.). (**Done** ✅)
 
-  - Unit tests for operator evaluation and rule matching.
+  - Unit tests for operator evaluation and rule matching. (**Done** ✅)
+
+  - Add integration test to validate the real `allocation_rules.json` against sample transactions. (**Done** ✅)
 
 ### 📌 Phase 4: Ingestion & Export
 
