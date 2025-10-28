@@ -53,11 +53,13 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── classify.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── export.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── utils.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── spreadsheet_schema.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── models.py<br>
 ├── tests/ &nbsp;&nbsp; # Unit tests<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_classify.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_rules_integration.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── test_export.py<br>
 
 ## 🧩 Module Breakdown
