@@ -32,7 +32,7 @@ This project involves developing a modular and robust system to manage and autom
 
 - Python 3
 - `pandas` for data processing
-- `openpyxl` or `xlsxwriter` for spreadsheet generation
+- `openpyxl` for spreadsheet generation
 - `argparse` for CLI
 - `unittest` and `pytest` for testing
 
@@ -49,18 +49,22 @@ bookkeeping-assistant/<br>
 ├── output/<br> 
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── bookkeeping_2025.xlsx<br> 
 ├── src/ &nbsp;&nbsp; # Modular components<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── \_\_init\_\_.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── classify.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── export.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── utils.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── mapping.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── pipeline.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── rules.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── spreadsheet_schema.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── models.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── utils.py<br>
 ├── tests/ &nbsp;&nbsp; # Unit tests<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_classify.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_rules_integration.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── test_export.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_export.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── test_pipeline.py<br>
 
 ## 🧩 Module Breakdown
 
@@ -88,10 +92,6 @@ bookkeeping-assistant/<br>
 
 `src/utils.py`
 - Helper functions: logging, fuzzy matching, regex parsing
-
-`src/models.py`
-- Defines `Transaction` dataclass
-- Optional: `Account`, `Statement`, or `ClassificationResult` classes
 
 `tests/`
 - Unit tests for each module
