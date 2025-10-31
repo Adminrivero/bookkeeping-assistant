@@ -46,11 +46,15 @@
 
 - **Tasks:**
 
+  - Add schema module (`spreadsheet_schema.py`) to centralize column definitions. (**Done** ✅)
+
+  - Implement `export.py` (generate spreadsheet with schema, formulas, formatting). (**Done** ✅)
+
+  - Add transaction-to-schema mapping function (`mapping.py`) to connect the classifier output to the exporter. (**Done** ✅)
+
+  - Implement the pipeline module (runner) for workflow orchestration (ingest $\rightarrow$ classify $\rightarrow$ map $\rightarrow$ export). (**Done** ✅)
+
   - Implement `ingest.py` (read CSV/Excel, normalize).
-
-  - Implement `export.py` (generate spreadsheet with schema, formulas, formatting).
-
-  - Add schema module (`spreadsheet_schema.py`) to centralize column definitions.
 
 ### 📌 Phase 5: Integration & CLI
 
