@@ -53,4 +53,4 @@ def test_run_pipeline_creates_workbook(fake_transactions, fake_rules):
     assert ws["F4"].value == -5.00 # type: ignore
 
     # Second transaction unclassified → should land in Notes
-    assert "Unclassified" in ws["AB5"].value # type: ignore
+    assert "unclassified" in ws["AB5"].value # type: ignore

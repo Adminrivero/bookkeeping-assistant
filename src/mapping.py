@@ -4,7 +4,7 @@ mapping.py
 Provides functions to map classified transactions into the spreadsheet schema.
 """
 
-from spreadsheet_schema import get_schema
+from src.spreadsheet_schema import get_schema
 from typing import Any
 
 def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> dict:
@@ -53,7 +53,7 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
 
     # Notes column for unclassified or manual review
     if classification["category"] == "Unclassified":
-        row["Notes"] = f"Please, review unclassified: {raw_tx.get('Description')}"
+        row["Notes"] = f"Please, review unclassified transaction: {raw_tx.get('Description')}"
 
     # TOTAL column formula will be inserted by exporter (formula_template)
     return row
