@@ -9,10 +9,10 @@ Defines the orchestration pipeline for bookkeeping automation:
 """
 
 from tqdm import tqdm
-from src.rules import RuleLoader
-from src.classify import TransactionClassifier
-from src.mapping import map_transaction_to_row
-from src.export import SpreadsheetExporter
+from rules import RuleLoader
+from classify import TransactionClassifier
+from mapping import map_transaction_to_row
+from export import SpreadsheetExporter
 
 def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bool = True):
     """

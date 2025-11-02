@@ -4,7 +4,7 @@ mapping.py
 Provides functions to map classified transactions into the spreadsheet schema.
 """
 
-from src.spreadsheet_schema import get_schema
+from spreadsheet_schema import get_schema
 from typing import Any
 
 def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> dict:

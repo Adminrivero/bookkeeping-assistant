@@ -8,7 +8,7 @@ based on the schema defined in spreadsheet_schema.py.
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from src.spreadsheet_schema import get_schema
+from spreadsheet_schema import get_schema
 
 class SpreadsheetExporter:
     """
