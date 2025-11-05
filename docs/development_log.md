@@ -54,7 +54,7 @@
 
   - Implement the pipeline module (runner) for workflow orchestration (ingest $\rightarrow$ classify $\rightarrow$ map $\rightarrow$ export). (**Done** ✅)
 
-  - Implement `ingest.py` (read CSV/Excel, normalize).
+  - Implement `ingest.py` (read CSV/Excel, normalize). (**Done** ✅)
 
 ### 📌 Phase 5: Integration & CLI
 
@@ -62,11 +62,11 @@
 
 - **Tasks:**
 
-  - Wire ingestion → classification → export in `run_pipeline`.
+  - Wire ingestion → classification → export in `run_pipeline`. (**Done** ✅)
 
-  - Add CLI options (`--year`, `--dry-run`, etc.).
+  - Add CLI options (`--year`, `--dry-run`, etc.). (**Done** ✅)
 
-  - Implement progress bar for `run_pipeline` steps (e.g., using `tqdm` or similar library).
+  - Implement progress bar for `run_pipeline` steps (e.g., using `tqdm` or similar library). (**Done** ✅)
 
   - Add logging for transparency.
 
@@ -78,7 +78,7 @@
 
   - Expand `tests/` with unit and integration tests.
 
-  - Ensure at least 3 functions in ./`project.py` are tested with pytest, and implemented in ./`test_project.py`.
+  - Ensure at least 3 functions in ./`project.py` are tested with pytest, and implemented in ./`test_project.py`. (**Done** ✅)
 
   - Document usage in `README.md` (installation, running, testing).
 
