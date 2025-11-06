@@ -27,30 +27,38 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
         openpyxl Workbook object
     """
     # Load rules
-    print("[1/4] Loading rules...")
+    if show_progress:
+        print("[1/4] Loading rules...")
     loader = RuleLoader(rules_file)
     rules = loader.load()
     classifier = TransactionClassifier(rules)
-    print("    ✅ Rules loaded")
+    if show_progress:
+        print("    ✅ Rules loaded")
 
     # Build exporter
-    print("[2/4] Building exporter...")
+    if show_progress:
+        print("[2/4] Building exporter...")
     exporter = SpreadsheetExporter()
     exporter.build_headers()
-    print("    ✅ Exporter ready")
+    if show_progress:
+        print("    ✅ Exporter ready")
 
     # Process transactions
-    print("[3/4] Classifying and mapping transactions...")
+    if show_progress:
+        print("[3/4] Classifying and mapping transactions...")
     iterator = tqdm(transactions, desc="Processing", unit="tx") if show_progress else transactions
     for idx, tx in enumerate(iterator, start=start_row):
         classification = classifier.classify(tx)
         row = map_transaction_to_row(tx, classification, idx)
         exporter.write_transaction(idx, row)
-    print("    ✅ Transactions classified and mapped")
+    if show_progress:
+        print("    ✅ Transactions classified and mapped")
 
     # Add totals row
-    print("[4/4] Finalizing totals row...")
+    if show_progress:
+        print("[4/4] Finalizing totals row...")
     exporter.finalize_totals_row(start_row, idx) # type: ignore
-    print("    ✅ Totals row complete")
+    if show_progress:
+        print("    ✅ Totals row complete")
 
     return exporter.wb
