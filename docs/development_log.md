@@ -6,7 +6,7 @@
 
 - **Tasks:**
 
-  - Create `project.py` with `main()` and at least 3 additional functions (`validate_environment`, `load_rules`, `run_pipeline`). (**Done** ✅)
+  - Create `project.py` with `main()` and at least 3 additional functions (`get_cli_args`, `setup_paths`, `load_rules`). (**Done** ✅)
 
   - Add `test_project.py` in root with tests for those functions. (**Done** ✅)
 
@@ -64,7 +64,7 @@
 
   - Wire ingestion → classification → export in `run_pipeline`. (**Done** ✅)
 
-  - Add CLI options (`--year`, `--dry-run`, etc.). (**Done** ✅)
+  - Add CLI options (`--year`, `--no-progress`, etc.). (**Done** ✅)
 
   - Implement progress bar for `run_pipeline` steps (e.g., using `tqdm` or similar library). (**Done** ✅)
 
@@ -76,7 +76,7 @@
 
 - **Tasks:**
 
-  - Expand `tests/` with unit and integration tests.
+  - Expand `tests/` with unit and integration tests. (**Done** ✅)
 
   - Ensure at least 3 functions in ./`project.py` are tested with pytest, and implemented in ./`test_project.py`. (**Done** ✅)
 
