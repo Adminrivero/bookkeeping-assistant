@@ -86,8 +86,8 @@
       ],
       "dual_entry": {
         "DR_COLUMN": { "name": "Bank Fees", "letter": "P" },
-        "CR_COLUMN": { "name": "Shareholder Contribution (CR)", "letter": "F" },
-        "APPLY_PERCENTAGE": -1.0
+        "CR_COLUMN": { "name": "Revenue CR", "letter": "H" },
+        "APPLY_PERCENTAGE": 1.0
       }
     },
     {
