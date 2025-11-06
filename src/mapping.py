@@ -34,9 +34,9 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
 
     # Determine amount (Debit or Credit from raw_tx)
     amount = None
-    if tx_type in ["EXPENSE", "MANUAL_CR", "INCOME_TO_OFFSET_EXPENSE"]:
+    if tx_type in ["EXPENSE", "MANUAL_CR"]:
         amount = raw_tx.get("Debit")
-    elif tx_type in ["INCOME", "MANUAL_DR"]:
+    elif tx_type in ["INCOME", "MANUAL_DR", "INCOME_TO_OFFSET_EXPENSE"]:
         amount = raw_tx.get("Credit")
 
     if amount is not None and dual_entry:
@@ -49,7 +49,7 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
         if dr_col:
             row[dr_col["name"]] = adjusted_amount
         if cr_col:
-            row[cr_col["name"]] = -adjusted_amount  # credits as negative
+            row[cr_col["name"]] = adjusted_amount
 
     # Notes column for unclassified or manual review
     if classification["category"] == "Unclassified":
