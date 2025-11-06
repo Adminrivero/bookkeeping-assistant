@@ -62,14 +62,16 @@ def main():
     # Define the final output file path
     output_file = output_dir / f"bookkeeping_{args.year}.xlsx"
     
-    print(f"Starting pipeline for year {args.year}...")
-    print(f"Input files found: {len(input_files)}")
-    print(f"Transactions loaded: {len(transactions)}")
-    print(f"Rules loaded from: {args.rules}")
-    print(f"Output will be saved to: {output_file}")
+    # Conditionally show progress
+    if not args.no_progress:
+        print(f"Starting pipeline for year {args.year}...")
+        print(f"Input files found: {len(input_files)}")
+        print(f"Transactions loaded: {len(transactions)}")
+        print(f"Rules loaded from: {args.rules}")
+        print(f"Output will be saved to: {output_file}")
 
     # Run pipeline
-    wb = run_pipeline(transactions, args.rules)
+    wb = run_pipeline(transactions, args.rules, show_progress=(not args.no_progress))
     wb.save(output_file)
     
     print(f"\n✅ Success! Pipeline complete. File saved to {output_file}")
@@ -91,6 +93,11 @@ def get_cli_args() -> argparse.Namespace:
         type=Path,
         default=Path("config/allocation_rules.json"),
         help="Path to the JSON allocation rules file (default: config/allocation_rules.json)."
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars and verbose status messages."
     )
     return parser.parse_args()
 
