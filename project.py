@@ -83,18 +83,21 @@ def get_cli_args() -> argparse.Namespace:
         epilog="Example: python project.py --year 2025 --rules config/my_rules.json"
     )
     parser.add_argument(
+        "-y",
         "--year",
         type=int,
         default=datetime.now().year,
         help="Target financial year to process (default: current year)."
     )
     parser.add_argument(
+        "-r",
         "--rules",
         type=Path,
         default=Path("config/allocation_rules.json"),
         help="Path to the JSON allocation rules file (default: config/allocation_rules.json)."
     )
     parser.add_argument(
+        "-q",
         "--no-progress",
         action="store_true",
         help="Disable progress bars and verbose status messages."
