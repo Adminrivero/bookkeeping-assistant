@@ -54,6 +54,7 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
     # Notes column for unclassified or manual review
     if classification["transaction_type"] in ["MANUAL_CR", "MANUAL_DR"]:
         row["Notes"] = f"Please, review unclassified transaction: {raw_tx.get('Description')}"
+        row["highlight"] = True
 
     # TOTAL column formula will be inserted by exporter (formula_template)
     return row
