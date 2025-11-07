@@ -157,7 +157,7 @@
       "transaction_type": "MANUAL_CR",
       "logic": "MUST_MATCH_ANY",
       "rules": [
-        { "field": "Description", "operator": "CONTAINS", "value": "NO FRILLS" },
+        { "field": "Description", "operator": "CONTAINS", "value": "NO FRI" },
         { "field": "Description", "operator": "CONTAINS", "value": "SOBEYS" },
         { "field": "Description", "operator": "CONTAINS", "value": "COSTCO WHOLESAL" },
         { "field": "Description", "operator": "CONTAINS", "value": "WALMART STORE" },
