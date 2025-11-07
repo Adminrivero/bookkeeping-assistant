@@ -47,18 +47,24 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
     if show_progress:
         print("[3/4] Classifying and mapping transactions...")
     iterator = tqdm(transactions, desc="Processing", unit="tx") if show_progress else transactions
+    end_row = start_row - 1
     for idx, tx in enumerate(iterator, start=start_row):
         classification = classifier.classify(tx)
         row = map_transaction_to_row(tx, classification, idx)
         exporter.write_transaction(idx, row)
+        end_row = idx
     if show_progress:
         print("    ✅ Transactions classified and mapped")
 
     # Add totals row
     if show_progress:
         print("[4/4] Finalizing totals row...")
-    exporter.finalize_totals_row(start_row, idx) # type: ignore
-    if show_progress:
-        print("    ✅ Totals row complete")
+    if end_row >= start_row:
+        exporter.finalize_totals_row(start_row, end_row)
+        if show_progress:
+            print("    ✅ Totals row complete")
+    else:
+        if show_progress:
+            print("    ⚠️ No transactions, skipping totals row")
 
     return exporter.wb

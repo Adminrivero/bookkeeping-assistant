@@ -57,9 +57,14 @@ class SpreadsheetExporter:
             if col.formula_template and value is None:
                 # Insert formula dynamically
                 formula = col.formula_template.format(row=row_idx)
-                self.ws.cell(row=row_idx, column=idx, value=formula)
+                cell.value = formula # type: ignore
             else:
-                self.ws.cell(row=row_idx, column=idx, value=value)
+                cell.value = value
+            # Apply number format based on data_format
+            if col.data_format["number"]["category"] == "Currency":
+                cell.number_format = '$#,##0.00'
+            elif col.data_format["number"]["category"] == "Date":
+                cell.number_format = 'YYYY-MM-DD'
             # Apply highlighting and borders if manual review flag is set
             if transaction.get("highlight"):
                 cell.fill = self.highlight_fill
@@ -70,15 +75,24 @@ class SpreadsheetExporter:
         schema = get_schema()
         totals_row = end_row + 1
         for idx, col in enumerate(schema, start=1):
-            if col.letter >= "C" and col.letter <= "AA":
+            if (col.letter >= "C" and col.letter <= "Z") or (col.letter == "AA"):
                 formula = f"=SUM({col.letter}{start_row}:{col.letter}{end_row})"
-                cell = self.ws.cell(row=totals_row, column=idx, value=formula)
+                cell = self.ws.cell(row=totals_row, column=idx)
+                cell.value = formula # type: ignore
+                # Apply number format
+                if col.data_format["number"]["category"] == "Currency":
+                    cell.number_format = '$#,##0.00'
                 # Apply bold font for visibility
                 cell.font = Font(bold=True)
             elif col.name == "Item":
                 # Add "Totals" label for visibility
-                cell = self.ws.cell(row=totals_row, column=idx, value="Totals")
+                cell = self.ws.cell(row=totals_row, column=idx)
+                cell.value = "Totals" # type: ignore
                 cell.font = Font(bold=True)
+        # Add borders to all cells in the totals row for visibility
+        for idx in range(1, len(schema) + 1):
+            cell = self.ws.cell(row=totals_row, column=idx)
+            cell.border = self.thin_border
 
     def save(self, filename: str):
         """Save the workbook to disk."""
