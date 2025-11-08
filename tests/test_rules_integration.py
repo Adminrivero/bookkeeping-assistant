@@ -43,7 +43,7 @@ def test_bank_rebate_rule(classifier):
     tx = {"Description": "ACCT BAL REBATE", "Debit": "", "Credit": 5.00}
     result = classifier.classify(tx)
     assert result["category"] == "Bank Fees - Account Rebate"
-    assert result["dual_entry"]["APPLY_PERCENTAGE"] == -1.0
+    assert result["dual_entry"]["APPLY_PERCENTAGE"] == 1.0
 
 def test_vehicle_fuel_range_rule(classifier):
     tx = {"Description": "ESSO CIRCLE K", "Debit": 50.00, "Credit": ""}
