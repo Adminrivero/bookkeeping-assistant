@@ -10,6 +10,8 @@ A modular Python tool designed to automate the classification of financial trans
 
 This project involves developing a modular and robust system to manage and automate the allocation of resources based on a set of user-defined rules. The first stable version (v1.0), featuring the initial set of desired features, is specifically suited to meet the requirements for a final project in CS50's Introduction to Programming with Python (CS50P). This system is designed to provide high flexibility and is adaptable to various real-world scenarios. It ensures efficient resource distribution and minimizes manual oversight.
 
+---
+
 ## ✅ CS50P Final Project Requirements
 
 - **Files and Modularity:** The project consists of **at least three `.py` files** (e.g., `project.py`, `classifier.py`, `export.py`), demonstrating strong modular design and separation of concerns.
@@ -22,6 +24,8 @@ This project involves developing a modular and robust system to manage and autom
 
 - **Dependencies:** Contains a **`requirements.txt`** file listing all necessary pip-installable libraries required for the project to run.
 
+---
+
 ## 🎯 Features
 
 - Ingests CSV/Excel files from checking accounts and credit cards
@@ -31,6 +35,8 @@ This project involves developing a modular and robust system to manage and autom
 - Organizes output files into year-based directories
 - Optional logging for transparency (`--log`)
 - Optional progress bar toggle (`--no-progress`)
+
+---
 
 ## 🧠 Technologies
 
@@ -69,6 +75,8 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_export.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── test_pipeline.py<br>
 
+---
+
 ## 🧩 Module Breakdown
 
 `project.py`
@@ -98,6 +106,8 @@ bookkeeping-assistant/<br>
 
 `tests/`
 - Unit tests for each module using `pytest`
+
+---
 
 ## 📑 JSON Ruleset Schema
 
@@ -161,21 +171,67 @@ This example matches ("ESSO" **OR** "7-ELEVEN") **AND** any amount between $20.0
 ## 🚀 Getting Started
 
 1. Clone the repo
-2. Place your bank and credit card CSV files in `data/raw/`
-3. Run the assistant:
+
+   ```bash
+   git clone https://github.com/Adminrivero/bookkeeping-assistant.git
+   cd bookkeeping-assistant
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Place your bank and credit card CSV files in `data/{year}/`.
+
+4. Run the assistant:
    ```bash
    python project.py --year 2025
    ```
-4. View the generated spreadsheet in output/
+5. View the generated spreadsheet in `output/{year}/`.
+
+---
+
+## 🖥️ Usage
+
+Run the assistant from the command line:
+
+```bash
+python project.py --year 2025
+```
+
+### Options
+
+- `--year YEAR` or `-y YEAR` <br>
+  Target financial year to process. Defaults to the current year.
+
+- `--rules PATH` or `-r PATH` <br>
+  Path to the JSON allocation rules file. Defaults to `config/allocation_rules.json`.
+
+- `--use-logging` or `-l` <br>
+  Enable logging output (timestamps and levels) instead of simple print statements.
+
+- `--no-progress` or `-q` <br>
+  Disable progress bar output for a cleaner CLI experience.
+
+### Example
+
+```bash
+python project.py --year 2024 --rules config/allocation_rules.json --use-logging
+```
+
+---
 
 ## 🧪 Run Tests
 
 ```bash
-pytest tests/
+pytest -v
 ```
 
 ## 📌 Notes
 
-- Classification rules can be updated in config/allocation_rules.json
-- Ambiguous transactions will be flagged for manual review
-- Future enhancements may include fuzzy matching and ML-based classification
+- Classification rules can be updated in `config/allocation_rules.json`.
+- Ambiguous transactions will be flagged for manual review in the Notes column.
+- Logging can be enabled with `--use-logging` or `-l` for detailed transparency.
+- Future enhancements may include PDF ingestion, fuzzy matching, and CI integration.
