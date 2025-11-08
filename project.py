@@ -117,7 +117,7 @@ def get_cli_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-l",
-        "--use-logging",
+        "--log",
         dest="log",
         action="store_true",
         help="Enable logging output instead of print statements."
