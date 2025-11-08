@@ -1,6 +1,8 @@
 # 🧾 Bookkeeping Assistant
 
-#### Video Demo: [URL HERE]()
+#### Video Demo: [Watch on YouTube](URL-HERE)
+
+---
 
 #### Description:
 
@@ -27,14 +29,16 @@ This project involves developing a modular and robust system to manage and autom
 - Flags ambiguous entries for manual review
 - Generates a formatted Excel spreadsheet with formulas and summaries
 - Organizes output files into year-based directories
+- Optional logging for transparency (`--log`)
+- Optional progress bar toggle (`--no-progress`)
 
 ## 🧠 Technologies
 
 - Python 3
-- `pandas` for data processing
 - `openpyxl` for spreadsheet generation
 - `argparse` for CLI
-- `unittest` and `pytest` for testing
+- `pytest` for testing
+- `logging` for optional structured output
 
 ## 📁 Project Structure
 bookkeeping-assistant/<br>
@@ -44,10 +48,9 @@ bookkeeping-assistant/<br>
 ├── config/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── allocation_rules.json &nbsp;&nbsp; # Classification rules<br>
 ├── data/<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── raw/ &nbsp;&nbsp; # Input files (bank transactions `.csv`, credit card statements `.csv`/`.pdf`)<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── processed/ &nbsp;&nbsp; # Cleaned and categorized files<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── 2025/ &nbsp;&nbsp; # Input files (bank transactions `.csv`)<br>
 ├── output/<br> 
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── bookkeeping_2025.xlsx<br> 
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/bookkeeping_2025.xlsx<br> 
 ├── src/ &nbsp;&nbsp; # Modular components<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── \_\_init\_\_.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── ingest.py<br>
@@ -69,15 +72,15 @@ bookkeeping-assistant/<br>
 ## 🧩 Module Breakdown
 
 `project.py`
-- Application entry point, contains main() function
-- Uses `argparse` to specify year, input files, or mode (e.g., dry-run vs export
+- Application entry point, contains `main()` function
+- Uses `argparse` to specify year, rules file, and options (`--log`, `--no-progress`).
 
 `config/allocation_rules.json`
 - Stores classification rules (merchant keywords, thresholds, categories)
 - Easy to update without touching code
 
 `src/ingest.py`
-- Reads and normalizes CSV/Excel files
+- Reads and normalizes CSV files
 - Cleans column names, parses dates, standardizes formats
 
 `src/classify.py`
@@ -87,15 +90,14 @@ bookkeeping-assistant/<br>
 - Flags ambiguous entries for manual review
 
 `src/export.py`
-- Builds final spreadsheet using `openpyxl` or `xlsxwriter`
+- Builds final spreadsheet using `openpyxl`
 - Adds formulas, summary sheets, formatting
 
 `src/utils.py`
-- Helper functions: logging, fuzzy matching, regex parsing
+- Helper functions: unified `notify()` for print/logging, reusable utilities.
 
 `tests/`
-- Unit tests for each module
-- Use `unittest` or `pytest`
+- Unit tests for each module using `pytest`
 
 ## 📑 JSON Ruleset Schema
 
@@ -177,5 +179,3 @@ pytest tests/
 - Classification rules can be updated in config/allocation_rules.json
 - Ambiguous transactions will be flagged for manual review
 - Future enhancements may include fuzzy matching and ML-based classification
-
-
