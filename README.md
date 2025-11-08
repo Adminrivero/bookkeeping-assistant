@@ -209,7 +209,7 @@ python project.py --year 2025
 - `--rules PATH` or `-r PATH` <br>
   Path to the JSON allocation rules file. Defaults to `config/allocation_rules.json`.
 
-- `--use-logging` or `-l` <br>
+- `--log` or `-l` <br>
   Enable logging output (timestamps and levels) instead of simple print statements.
 
 - `--no-progress` or `-q` <br>
@@ -218,7 +218,7 @@ python project.py --year 2025
 ### Example
 
 ```bash
-python project.py --year 2024 --rules config/allocation_rules.json --use-logging
+python project.py --year 2024 --rules config/allocation_rules.json --log
 ```
 
 ---
@@ -233,5 +233,5 @@ pytest -v
 
 - Classification rules can be updated in `config/allocation_rules.json`.
 - Ambiguous transactions will be flagged for manual review in the Notes column.
-- Logging can be enabled with `--use-logging` or `-l` for detailed transparency.
+- Logging can be enabled with `--log` or `-l` for detailed transparency.
 - Future enhancements may include PDF ingestion, fuzzy matching, and CI integration.
