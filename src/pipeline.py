@@ -13,6 +13,7 @@ from src.rules import RuleLoader
 from src.classify import TransactionClassifier
 from src.mapping import map_transaction_to_row
 from src.export import SpreadsheetExporter
+from src.utils import notify
 
 def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bool = True):
     """
@@ -28,24 +29,24 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
     """
     # Load rules
     if show_progress:
-        print("[1/4] Loading rules...")
+        notify("[1/4] Loading rules...", level="info")
     loader = RuleLoader(rules_file)
     rules = loader.load()
     classifier = TransactionClassifier(rules)
     if show_progress:
-        print("    ✅ Rules loaded")
+        notify("    ✅ Rules loaded", level="info")
 
     # Build exporter
     if show_progress:
-        print("[2/4] Building exporter...")
+        notify("[2/4] Building exporter...", level="info")
     exporter = SpreadsheetExporter()
     exporter.build_headers()
     if show_progress:
-        print("    ✅ Exporter ready")
+        notify("    ✅ Exporter ready", level="info")
 
     # Process transactions
     if show_progress:
-        print("[3/4] Classifying and mapping transactions...")
+        notify("[3/4] Classifying and mapping transactions...", level="info")
     iterator = tqdm(transactions, desc="Processing", unit="tx") if show_progress else transactions
     end_row = start_row - 1
     for idx, tx in enumerate(iterator, start=start_row):
@@ -54,17 +55,17 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
         exporter.write_transaction(idx, row)
         end_row = idx
     if show_progress:
-        print("    ✅ Transactions classified and mapped")
+        notify("    ✅ Transactions classified and mapped", level="info")
 
     # Add totals row
     if show_progress:
-        print("[4/4] Finalizing totals row...")
+        notify("[4/4] Finalizing totals row...", level="info")
     if end_row >= start_row:
         exporter.finalize_totals_row(start_row, end_row)
         if show_progress:
-            print("    ✅ Totals row complete")
+            notify("    ✅ Totals row complete", level="info")
     else:
         if show_progress:
-            print("    ⚠️ No transactions, skipping totals row")
+            notify("    ⚠️ No transactions, skipping totals row", level="warning")
 
     return exporter.wb
