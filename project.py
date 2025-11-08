@@ -116,8 +116,9 @@ def get_cli_args() -> argparse.Namespace:
         help="Disable progress bars and verbose status messages."
     )
     parser.add_argument(
-        "-log",
+        "-l",
         "--use-logging",
+        dest="log",
         action="store_true",
         help="Enable logging output instead of print statements."
     )
