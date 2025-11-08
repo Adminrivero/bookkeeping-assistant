@@ -9,20 +9,22 @@ pipeline. It handles:
 - Orchestrating the pipeline (ingest -> classify -> map -> export).
 """
 
-import sys
-import json
+# --- Standard Libraries ---
 import argparse
-from pathlib import Path
+import json
+import logging
+import sys
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+# --- Third-Party / External ---
+from pathlib import Path
+# -- Local Project Imports ---
+from src.ingest import load_csv
+from src.pipeline import run_pipeline
+from src.utils import notify, use_logging
 
-try:
-    from src.pipeline import run_pipeline
-    from src.ingest import load_csv
-except ImportError as e:
-    print(f"\nError: {e}")
-    print("Please ensure 'src/pipeline.py' and 'src/ingest.py' exist and are correctly structured.\n")
-    sys.exit(1)
+
+# The rest of your script (functions, constants, main logic) follows here.
 
 def main():
     """
@@ -35,17 +37,28 @@ def main():
     """
     args = get_cli_args()
     
+    # Enable logging if flag is set
+    if args.log:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            handlers=[logging.StreamHandler()]
+        )
+        # Toggle global flag
+        import src.utils
+        src.utils.use_logging = True
+    
     try:
         input_dir, output_dir, input_files = setup_paths(args.year)
     except FileNotFoundError as e:
-        print(f"EnvironmentError: {e}")
+        notify(f"EnvironmentError: {e}", level="error")
         # print("Please ensure the required data directory exists and contains CSV files.")
         sys.exit(1)
     
     try:
         rules = load_rules(args.rules)
     except (FileNotFoundError, json.JSONDecodeError, TypeError) as e:
-        print(f"RulesError: {e}")
+        notify(f"RulesError: {e}", level="error")
         # print("Please ensure the rules file exists and is a valid JSON.")
         sys.exit(1)
     
@@ -56,7 +69,7 @@ def main():
             txs = load_csv(str(csv_file))
             transactions.extend(txs)
         except Exception as e:
-            print(f"Error loading CSV {csv_file}: {e}")
+            notify(f"Error loading CSV {csv_file}: {e}", level="error")
             sys.exit(1)
     
     # Define the final output file path
@@ -64,17 +77,17 @@ def main():
     
     # Conditionally show progress
     if not args.no_progress:
-        print(f"Starting pipeline for year {args.year}...")
-        print(f"Input files found: {len(input_files)}")
-        print(f"Transactions loaded: {len(transactions)}")
-        print(f"Rules loaded from: {args.rules}")
-        print(f"Output will be saved to: {output_file}")
+        notify(f"Starting pipeline for year {args.year}...", level="info")
+        notify(f"Input files found: {len(input_files)}", level="info")
+        notify(f"Transactions loaded: {len(transactions)}", level="info")
+        notify(f"Rules loaded from: {args.rules}", level="info")
+        notify(f"Output will be saved to: {output_file}", level="info")
 
     # Run pipeline
     wb = run_pipeline(transactions, args.rules, show_progress=(not args.no_progress))
     wb.save(output_file)
-    
-    print(f"\n✅ Success! Pipeline complete. File saved to {output_file}")
+
+    notify(f"\n✅ Success! Pipeline complete. File saved to {output_file}", level="info")
 
 def get_cli_args() -> argparse.Namespace:
     """Parse and return command-line arguments."""
@@ -101,6 +114,12 @@ def get_cli_args() -> argparse.Namespace:
         "--no-progress",
         action="store_true",
         help="Disable progress bars and verbose status messages."
+    )
+    parser.add_argument(
+        "-log",
+        "--use-logging",
+        action="store_true",
+        help="Enable logging output instead of print statements."
     )
     return parser.parse_args()
 
