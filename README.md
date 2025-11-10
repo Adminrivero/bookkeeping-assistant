@@ -1,6 +1,6 @@
 # 🧾 Bookkeeping Assistant
 
-#### Video Demo: [Watch on YouTube](URL-HERE)
+#### Video Demo: [Watch on YouTube](https://youtu.be/1lb6IjtB24M)
 
 ---
 
