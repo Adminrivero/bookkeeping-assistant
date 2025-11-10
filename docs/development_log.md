@@ -68,7 +68,7 @@
 
   - Implement progress bar for `run_pipeline` steps (e.g., using `tqdm` or similar library). (**Done** ✅)
 
-  - Add logging for transparency.
+  - Add logging for transparency. (**Done** ✅)
 
 ### 📌 Phase 6: Testing & Documentation
 
@@ -80,7 +80,7 @@
 
   - Ensure at least 3 functions in ./`project.py` are tested with pytest, and implemented in ./`test_project.py`. (**Done** ✅)
 
-  - Document usage in `README.md` (installation, running, testing).
+  - Document usage in `README.md` (installation, running, testing). (**Done** ✅)
 
 ### Phase 7: Final Polish & Submission
 
@@ -88,10 +88,10 @@
 
 - **Tasks:**
 
-  - Clean up repo (remove debug prints, finalize README)
+  - Clean up repo (remove debug prints, finalize README) (**Done** ✅)
 
-  - Tag release `v1.0`.
+  - Tag release `v1.0`. (**Done** ✅)
 
-  - Prepare submission package for CS50P.
+  - Prepare submission package for CS50P. (**Done** ✅)
 
 ## 🛠️ Work Layout Toward v2.0
