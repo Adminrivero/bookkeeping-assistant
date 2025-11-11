@@ -55,6 +55,11 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
     if classification["transaction_type"] in ["MANUAL_CR", "MANUAL_DR"]:
         row["Notes"] = f"Please, review unclassified transaction: {raw_tx.get('Description')}"
         row["highlight"] = True
+    
+    # Notes column for ignored transactions
+    if classification["transaction_type"] == "IGNORE_TRANSACTION":
+        row["Notes"] = f"Ignored transaction: {raw_tx.get('Description', 'item') + ' -> ' + str(raw_tx.get('Debit') or raw_tx.get('Credit'))}"
+        row["ignore"] = True
 
     # TOTAL column formula will be inserted by exporter (formula_template)
     return row

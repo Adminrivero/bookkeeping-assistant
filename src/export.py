@@ -23,6 +23,7 @@ class SpreadsheetExporter:
         self.ws = self.wb.active # type: ignore
         self.ws.title = "Bookkeeping"
         self.highlight_fill = PatternFill("solid", fgColor="FFFF99")
+        self.ignore_fill = PatternFill("solid", fgColor="D9D9D9")
         self.thin_border = Border(
             top=Side(border_style="thin", color="000000"),
             bottom=Side(border_style="thin", color="000000"),
@@ -68,6 +69,9 @@ class SpreadsheetExporter:
             # Apply highlighting and borders if manual review flag is set
             if transaction.get("highlight"):
                 cell.fill = self.highlight_fill
+            if transaction.get("ignore"):
+                cell.fill = self.ignore_fill
+                    
             cell.border = self.thin_border
 
     def finalize_totals_row(self, start_row: int, end_row: int):
