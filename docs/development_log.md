@@ -94,4 +94,24 @@
 
   - Prepare submission package for CS50P. (**Done** ✅)
 
-## 🛠️ Work Layout Toward v2.0
+## 🧭 v2.0 Work Layout (Roadmap for Tax Year 2025)
+
+### 📌 Phase 1: PDF Ingestion (High Priority)
+
+- **Goal:** Accept bank and credit card statements in PDF format.
+
+- **Branch:** `feature/pdf-ingestion`
+
+- **Tasks:**
+
+  - Design src/pdf_ingest.py to extract tabular data using pdfplumber or PyMuPDF
+
+  - Create bank_profiles/ directory with JSON configs for each institution (column mappings, header rules)
+
+  - Refactor ingestion pipeline to support both CSV and PDF inputs
+
+  - Add CLI flag --pdf or auto-detect .pdf files in data/{year}/
+
+  - Write unit tests for PDF parsing and normalization
+
+  - Update README with PDF support instructions
