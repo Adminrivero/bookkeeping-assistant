@@ -115,3 +115,49 @@
   - Write unit tests for PDF parsing and normalization
 
   - Update README with PDF support instructions
+
+### 📌 Phase 2: Rule Generator Assistant (High Priority)
+
+- **Goal:** Provide a guided CLI wizard that hides JSON and dual-entry complexity, enabling non-technical users to generate valid `allocation_rules.json` files.
+
+- **Branch:** `feature/rule-generator`
+
+- **Tasks:**
+
+  1. **Chart of Accounts Config**
+     - Create `config/chart_of_accounts.json` mapping human-friendly category names to DR/CR columns.
+     - Load this config in the wizard to abstract column letters from the user.
+
+  2. **Wizard Flow Implementation**
+     - Step 1: Prompt for transaction type (EXPENSE, INCOME, IGNORE).
+     - Step 2: Prompt for category selection from chart of accounts.
+     - Step 3: Prompt for keywords/vendors and logic choice (ANY vs ALL).
+     - Step 4: Optional refinement logic (amount filters, BETWEEN operator).
+     - Step 5: Review & confirm human-readable summary before saving.
+
+  3. **Validation & Error Handling**
+     - Validate numeric inputs (amounts, menu choices).
+     - Normalize and deduplicate keywords.
+     - Prevent duplicate rules by checking existing JSON before saving.
+     - Ensure schema compliance before writing to file.
+
+  4. **Advanced User Mode**
+     - Add option for manual DR/CR column definition.
+     - Support custom operators (e.g., STARTS_WITH, MATCHES_REGEX).
+
+  5. **Batch Mode (Optional for v2.0)**
+     - Allow importing a CSV of vendor/category pairs to auto-generate multiple rules.
+     - CLI flag: `--import vendors.csv`.
+
+  6. **Testing & Validation**
+     - Write unit tests for wizard prompts and JSON output.
+     - Add `--validate` flag to check schema compliance of existing `allocation_rules.json`.
+     - Add dry-run mode to preview generated JSON without saving.
+
+  7. **Documentation**
+     - Update README with usage examples:
+       ```bash
+       python rulegen.py
+       ```
+     - Provide sample chart_of_accounts.json and example generated rules.
+     - Document advanced mode and batch mode usage.
