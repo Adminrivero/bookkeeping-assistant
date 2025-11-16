@@ -1,0 +1,49 @@
+{
+  "bank_name": "Triangle MasterCard",
+  "sections": [
+    {
+      "section_name": "Payments",
+      "match_text": "Payments received",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "amount": 3
+      },
+      "skip_footer_rows": true
+    },
+    {
+      "section_name": "Credits",
+      "match_text": "Returns and other credits",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "amount": 3
+      },
+      "skip_footer_rows": true
+    },
+    {
+      "section_name": "Purchases",
+      "match_text": "Purchases",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "amount": 3
+      },
+      "skip_footer_rows": true
+    },
+    {
+      "section_name": "Interest",
+      "match_text": "Interest charges",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "amount": 3
+      },
+      "skip_footer_rows": true
+    }
+  ]
+}
