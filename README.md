@@ -1,5 +1,7 @@
 # 🧾 Bookkeeping Assistant
 
+![Run Unit Tests](https://github.com/Adminrivero/Bookkeeping-Assistant/actions/workflows/tests.yml/badge.svg)
+
 #### Video Demo: [Watch on YouTube](https://youtu.be/1lb6IjtB24M)
 
 ---
