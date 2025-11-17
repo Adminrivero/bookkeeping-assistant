@@ -10,6 +10,7 @@ import pdfplumber
 import csv
 import re
 import logging
+import json
 from datetime import datetime
 
 # Configure logging
@@ -63,31 +64,49 @@ def normalize_filename(pdf_path: pathlib.Path, bank: str):
     return pdf_path
 
 
-def parse_section(table, section_name, source):
+def load_bank_profile(bank: str):
     """
-    Parse a single transaction table into normalized dicts.
+    Load a bank profile config from ./config/bank_profiles/<bank>.json.
+
+    Args:
+        bank (str): Bank identifier (e.g., 'triangle', 'cibc', 'td_visa').
+
+    Returns:
+        dict: Parsed JSON config for the bank.
+    """
+    profile_path = pathlib.Path(f"./config/bank_profiles/{bank}.json")
+    if not profile_path.exists():
+        raise FileNotFoundError(f"No profile config found for bank: {bank}")
+    with open(profile_path, "r") as f:
+        return json.load(f)
+
+
+def parse_section(table, section_config, source):
+    """
+    Parse a transaction table using bank profile config.
 
     Args:
         table (list[list[str]]): Extracted table rows.
-        section_name (str): Section label (Payments, Purchases, etc.).
-        source (str): Source identifier (e.g., 'Triangle MasterCard').
+        section_config (dict): Section config from bank profile JSON.
+        source (str): Source identifier.
 
     Returns:
         list[dict]: Normalized transaction dictionaries.
     """
     transactions = []
     if not table or len(table) < 2:
-        logging.warning("Empty or malformed table in section %s", section_name)
+        logging.warning("Empty or malformed table in section %s", section_config["section_name"])
         return transactions
 
+    cols = section_config["columns"]
     for row in table[1:]:
-        if not row or "total" in row[0].lower():
+        if section_config.get("skip_footer_rows", False) and "total" in row[0].lower():
             continue
         try:
-            tx_date = row[0].strip()
-            post_date = row[1].strip()
-            desc = row[2].strip()
-            amt_str = row[3].replace(",", "").replace("$", "").strip()
+            tx_date = row[cols["transaction_date"]].strip()
+            post_date = row[cols["posting_date"]].strip() if "posting_date" in cols else ""
+            desc = row[cols["description"]].strip()
+            amt_str = row[cols["amount"]].replace(",", "").replace("$", "").strip()
             amount = float(amt_str) if amt_str else 0.0
             transactions.append({
                 "transaction_date": tx_date,
@@ -95,40 +114,39 @@ def parse_section(table, section_name, source):
                 "description": desc,
                 "amount": amount,
                 "source": source,
-                "section": section_name
+                "section": section_config["section_name"]
             })
         except Exception as e:
-            logging.warning("Skipping malformed row in %s: %s | Error: %s", section_name, row, e)
-    logging.info("Parsed %d transactions from section %s", len(transactions), section_name)
+            logging.warning("Skipping malformed row in %s: %s | Error: %s", section_config["section_name"], row, e)
+    logging.info("Parsed %d transactions from section %s", len(transactions), section_config["section_name"])
     return transactions
 
 
-def parse_pdf(pdf_path: pathlib.Path, source: str):
+def parse_pdf(pdf_path: pathlib.Path, bank: str):
     """
-    Extract transactions from a Triangle MasterCard PDF.
+    Extract transactions from a PDF using bank profile config.
 
     Args:
         pdf_path (Path): Path to the PDF file.
-        source (str): Source identifier.
+        bank (str): Bank identifier.
 
     Returns:
         list[dict]: All transactions parsed from the PDF.
     """
     transactions = []
+    profile = load_bank_profile(bank)
+
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
                 text = page.extract_text() or ""
-                if "Payments received" in text:
-                    transactions.extend(parse_section(page.extract_table(), "Payments", source))
-                if "Returns and other credits" in text:
-                    transactions.extend(parse_section(page.extract_table(), "Credits", source))
-                if "Purchases" in text:
-                    transactions.extend(parse_section(page.extract_table(), "Purchases", source))
-                if "Interest charges" in text:
-                    transactions.extend(parse_section(page.extract_table(), "Interest", source))
+                for section in profile["sections"]:
+                    if section["match_text"] in text:
+                        table = page.extract_table()
+                        transactions.extend(parse_section(table, section, profile["bank_name"]))
     except Exception as e:
         logging.error("Failed to parse PDF %s: %s", pdf_path, e)
+
     logging.info("Extracted %d transactions from %s", len(transactions), pdf_path.name)
     return transactions
 

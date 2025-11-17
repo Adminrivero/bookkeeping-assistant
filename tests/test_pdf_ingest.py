@@ -43,7 +43,20 @@ def test_discover_pdfs(tmp_dir):
 def test_parse_section(sample_transactions):
     # Simulate table with headers + rows
     table = [["TRANSACTION DATE", "POSTING DATE", "DESCRIPTION", "AMOUNT"]] + sample_transactions
-    txs = pdf_ingest.parse_section(table, "Purchases", "Triangle MasterCard")
+    
+    section_config = {
+        "section_name": "Purchases",
+        "match_text": "Purchases",
+        "columns": {
+            "transaction_date": 0,
+            "posting_date": 1,
+            "description": 2,
+            "amount": 3
+        },
+        "skip_footer_rows": True
+    }
+
+    txs = pdf_ingest.parse_section(table, section_config, "Triangle MasterCard")
 
     assert len(txs) == 3
     assert txs[0]["description"].startswith("TD BANKLINE")
@@ -53,7 +66,20 @@ def test_parse_section(sample_transactions):
 def test_export_csv(tmp_dir, sample_transactions):
     # Convert sample rows into normalized dicts
     table = [["TRANSACTION DATE", "POSTING DATE", "DESCRIPTION", "AMOUNT"]] + sample_transactions
-    txs = pdf_ingest.parse_section(table, "Purchases", "Triangle MasterCard")
+    
+    section_config = {
+        "section_name": "Purchases",
+        "match_text": "Purchases",
+        "columns": {
+            "transaction_date": 0,
+            "posting_date": 1,
+            "description": 2,
+            "amount": 3
+        },
+        "skip_footer_rows": True
+    }
+    
+    txs = pdf_ingest.parse_section(table, section_config, "Triangle MasterCard")
 
     out_path = tmp_dir / "output.csv"
     pdf_ingest.export_csv(txs, out_path)
