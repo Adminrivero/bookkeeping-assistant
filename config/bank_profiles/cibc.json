@@ -1,0 +1,40 @@
+{
+  "bank_name": "CIBC Costco MasterCard",
+  "sections": [
+    {
+      "section_name": "Payments",
+      "match_text": "Your payments",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "amount": 3
+      },
+      "skip_footer_rows": true
+    },
+    {
+      "section_name": "Interest",
+      "match_text": "Your interest",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "annual_interest_rate": 3,
+        "amount": 4
+      },
+      "skip_footer_rows": true
+    },
+    {
+      "section_name": "Charges and Credits",
+      "match_text": "Your new charges and credits",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "spend_category": 3,
+        "amount": 4
+      },
+      "skip_footer_rows": true
+    }
+  ]
+}
