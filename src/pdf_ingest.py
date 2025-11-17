@@ -100,24 +100,29 @@ def parse_section(table, section_config, source):
 
     cols = section_config["columns"]
     for row in table[1:]:
-        if section_config.get("skip_footer_rows", False) and "total" in row[0].lower():
+        # Skip footer rows if flagged
+        if section_config.get("skip_footer_rows", False) and any("total" in cell.lower() for cell in row if cell):
             continue
+        
+        tx = {
+            "source": source,
+            "section": section_config["section_name"]
+        }
+        
         try:
-            tx_date = row[cols["transaction_date"]].strip()
-            post_date = row[cols["posting_date"]].strip() if "posting_date" in cols else ""
-            desc = row[cols["description"]].strip()
-            amt_str = row[cols["amount"]].replace(",", "").replace("$", "").strip()
-            amount = float(amt_str) if amt_str else 0.0
-            transactions.append({
-                "transaction_date": tx_date,
-                "posting_date": post_date,
-                "description": desc,
-                "amount": amount,
-                "source": source,
-                "section": section_config["section_name"]
-            })
+            for field, idx in cols.items():
+                if idx < len(row):
+                    value = row[idx].strip()
+                    # Convert amount to float if field is "amount"
+                    if field == "amount":
+                        value = value.replace(",", "").replace("$", "").strip()
+                        tx[field] = float(value) if value else 0.0
+                    else:
+                        tx[field] = value
+            transactions.append(tx)
         except Exception as e:
             logging.warning("Skipping malformed row in %s: %s | Error: %s", section_config["section_name"], row, e)
+            
     logging.info("Parsed %d transactions from section %s", len(transactions), section_config["section_name"])
     return transactions
 
