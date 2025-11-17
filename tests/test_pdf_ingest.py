@@ -3,6 +3,7 @@ Unit tests for PDF ingestion module (src/pdf_ingest.py).
 Validates discovery, parsing, normalization, and export behavior.
 """
 
+import json
 import pathlib
 import tempfile
 import csv
@@ -26,6 +27,13 @@ def sample_transactions():
         ["Jan 25", "Jan 25", "INTEREST CHARGES", "12.34"],
     ]
 
+@pytest.fixture
+def triangle_profile():
+    """Load Triangle MasterCard profile config from JSON."""
+    profile_path = pathlib.Path("./config/bank_profiles/triangle.json")
+    with open(profile_path, "r") as f:
+        return json.load(f)
+
 # --- Tests ---
 
 def test_discover_pdfs(tmp_dir):
@@ -40,46 +48,22 @@ def test_discover_pdfs(tmp_dir):
     assert pdf1 in pdfs and pdf2 in pdfs
 
 
-def test_parse_section(sample_transactions):
+def test_parse_section(sample_transactions, triangle_profile):
     # Simulate table with headers + rows
     table = [["TRANSACTION DATE", "POSTING DATE", "DESCRIPTION", "AMOUNT"]] + sample_transactions
-    
-    section_config = {
-        "section_name": "Purchases",
-        "match_text": "Purchases",
-        "columns": {
-            "transaction_date": 0,
-            "posting_date": 1,
-            "description": 2,
-            "amount": 3
-        },
-        "skip_footer_rows": True
-    }
-
-    txs = pdf_ingest.parse_section(table, section_config, "Triangle MasterCard")
+    section_config = triangle_profile["sections"][2]  # Purchases section
+    txs = pdf_ingest.parse_section(table, section_config, triangle_profile["bank_name"])
 
     assert len(txs) == 3
     assert txs[0]["description"].startswith("TD BANKLINE")
     assert isinstance(txs[0]["amount"], float)
 
 
-def test_export_csv(tmp_dir, sample_transactions):
+def test_export_csv(tmp_dir, sample_transactions, triangle_profile):
     # Convert sample rows into normalized dicts
     table = [["TRANSACTION DATE", "POSTING DATE", "DESCRIPTION", "AMOUNT"]] + sample_transactions
-    
-    section_config = {
-        "section_name": "Purchases",
-        "match_text": "Purchases",
-        "columns": {
-            "transaction_date": 0,
-            "posting_date": 1,
-            "description": 2,
-            "amount": 3
-        },
-        "skip_footer_rows": True
-    }
-    
-    txs = pdf_ingest.parse_section(table, section_config, "Triangle MasterCard")
+    section_config = triangle_profile["sections"][2]  # Purchases section
+    txs = pdf_ingest.parse_section(table, section_config, triangle_profile["bank_name"])
 
     out_path = tmp_dir / "output.csv"
     pdf_ingest.export_csv(txs, out_path)
