@@ -30,23 +30,29 @@ This project involves developing a modular and robust system to manage and autom
 
 ## 🎯 Features
 
-- Ingests CSV/Excel files from checking accounts and credit cards
-- Applies classification rules to categorize transactions (e.g., office vs vehicle expenses)
-- Flags ambiguous entries for manual review
-- Generates a formatted Excel spreadsheet with formulas and summaries
-- Organizes output files into year-based directories
-- Optional logging for transparency (`--log`)
-- Optional progress bar toggle (`--no-progress`)
+- Ingests CSV, Excel, and PDF statements with automatic column mapping and support for multiple bank formats
+- Applies JSON-driven classification rules with nested groups, multiple operators, and per-rule confidence scoring
+- Flags ambiguous transactions for manual review (CSV export with suggested matches and metadata)
+- Supports per-transaction allocation splits and user-customizable categories via `allocation_rules.json`
+- Exports a formatted Excel workbook (per-account sheets and summary totals), with optional CSV export
+- Organizes outputs into year-based directories under `output/` and creates tax-ready summaries
+- CLI with options for year, rules file, logging, progress bar, dry-run and export skipping (`--year`, `--rules`, `--log`, `--no-progress`, `--dry-run`, `--skip-export`, `--threshold`)
+- Optional progress bar and improved logging/colorized terminal output for Windows (`tqdm`, `logging`, `colorama`)
+- Robust unit/integration tests covering ingest, classification, pipeline, and export; CI integration via GitHub Actions
 
 ---
 
 ## 🧠 Technologies
 
-- Python 3
-- `openpyxl` for spreadsheet generation
-- `argparse` for CLI
-- `pytest` for testing
-- `logging` for optional structured output
+- **Python 3** – modular, testable codebase using OOP and CLI patterns
+- **CLI & UX** – argparse for command-line interface, tqdm for optional progress bar
+- **Spreadsheet Export** – openpyxl (with et_xmlfile) for Excel generation, formulas, and formatting
+- **Rules Engine** – JSON‑driven classification logic wired through TransactionClassifier and pipeline modules
+- **PDF Handling** – pdfminer.six, pdfplumber, pypdfium2, Pillow for parsing and processing statement PDFs
+- **Testing** – pytest for unit and integration tests
+- **Terminal Experience** – logging for structured logs, colorama for clean Windows output
+
+---
 
 ## 📁 Project Structure
 bookkeeping-assistant/<br>
