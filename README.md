@@ -40,11 +40,15 @@ This project involves developing a modular and robust system to manage and autom
 
 ## 🧠 Technologies
 
-- Python 3
-- `openpyxl` for spreadsheet generation
-- `argparse` for CLI
-- `pytest` for testing
-- `logging` for optional structured output
+- **Python 3** – modular, testable codebase using OOP and CLI patterns
+- **CLI & UX** – argparse for command-line interface, tqdm for optional progress bar
+- **Spreadsheet Export** – openpyxl (with et_xmlfile) for Excel generation, formulas, and formatting
+- **Rules Engine** – JSON‑driven classification logic wired through TransactionClassifier and pipeline modules
+- **PDF Handling** – pdfminer.six, pdfplumber, pypdfium2, Pillow for parsing and processing statement PDFs
+- **Testing** – pytest for unit and integration tests
+- **Terminal Experience** – logging for structured logs, colorama for clean Windows output
+
+---
 
 ## 📁 Project Structure
 bookkeeping-assistant/<br>
