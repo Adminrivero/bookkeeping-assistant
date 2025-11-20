@@ -28,13 +28,15 @@ This project involves developing a modular and robust system to manage and autom
 
 ## 🎯 Features
 
-- Ingests CSV/Excel files from checking accounts and credit cards
-- Applies classification rules to categorize transactions (e.g., office vs vehicle expenses)
-- Flags ambiguous entries for manual review
-- Generates a formatted Excel spreadsheet with formulas and summaries
-- Organizes output files into year-based directories
-- Optional logging for transparency (`--log`)
-- Optional progress bar toggle (`--no-progress`)
+- Ingests CSV, Excel, and PDF statements with automatic column mapping and support for multiple bank formats
+- Applies JSON-driven classification rules with nested groups, multiple operators, and per-rule confidence scoring
+- Flags ambiguous transactions for manual review (CSV export with suggested matches and metadata)
+- Supports per-transaction allocation splits and user-customizable categories via `allocation_rules.json`
+- Exports a formatted Excel workbook (per-account sheets and summary totals), with optional CSV export
+- Organizes outputs into year-based directories under `output/` and creates tax-ready summaries
+- CLI with options for year, rules file, logging, progress bar, dry-run and export skipping (`--year`, `--rules`, `--log`, `--no-progress`, `--dry-run`, `--skip-export`, `--threshold`)
+- Optional progress bar and improved logging/colorized terminal output for Windows (`tqdm`, `logging`, `colorama`)
+- Robust unit/integration tests covering ingest, classification, pipeline, and export; CI integration via GitHub Actions
 
 ---
 
