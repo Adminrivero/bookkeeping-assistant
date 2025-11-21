@@ -58,7 +58,11 @@ bookkeeping-assistant/<br>
 ├── requirements.txt<br>
 ├── project.py &nbsp;&nbsp; # Main entry point with main() and core functions<br>
 ├── config/<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── allocation_rules.json &nbsp;&nbsp; # Classification rules<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── allocation_rules.json &nbsp;&nbsp; # Classification rules<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── bank_profiles/<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── triangle.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── cibc.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── td_visa.json<br>
 ├── data/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── 2025/ &nbsp;&nbsp; # Input files (bank transactions `.csv`)<br>
 ├── output/<br> 
