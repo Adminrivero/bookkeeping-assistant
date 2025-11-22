@@ -1,0 +1,27 @@
+{
+  "bank_name": "TD Emerald Flex Rate Visa",
+  "sections": [
+    {
+      "section_name": "Transactions",
+      "match_text": "TD EMERALD FLEX RATE CARD",
+      "columns": {
+        "transaction_date": 0,
+        "posting_date": 1,
+        "description": 2,
+        "amount": 3
+      },
+      "skip_footer_rows": true
+    }
+  ],
+  "csv_format": {
+    "date_format": "MM/DD/YYYY",
+    "columns": {
+      "transaction_date": 0,
+      "description": 1,
+      "debit": 2,
+      "credit": 3,
+      "balance": 4
+    },
+    "skip_footer_rows": true
+  }
+}

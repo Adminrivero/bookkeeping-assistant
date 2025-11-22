@@ -100,24 +100,29 @@ def parse_section(table, section_config, source):
 
     cols = section_config["columns"]
     for row in table[1:]:
-        if section_config.get("skip_footer_rows", False) and "total" in row[0].lower():
+        # Skip footer rows if flagged
+        if section_config.get("skip_footer_rows", False) and any("total" in cell.lower() for cell in row if cell):
             continue
+        
+        tx = {
+            "source": source,
+            "section": section_config["section_name"]
+        }
+        
         try:
-            tx_date = row[cols["transaction_date"]].strip()
-            post_date = row[cols["posting_date"]].strip() if "posting_date" in cols else ""
-            desc = row[cols["description"]].strip()
-            amt_str = row[cols["amount"]].replace(",", "").replace("$", "").strip()
-            amount = float(amt_str) if amt_str else 0.0
-            transactions.append({
-                "transaction_date": tx_date,
-                "posting_date": post_date,
-                "description": desc,
-                "amount": amount,
-                "source": source,
-                "section": section_config["section_name"]
-            })
+            for field, idx in cols.items():
+                if idx < len(row):
+                    value = row[idx].strip()
+                    # Convert amount to float if field is "amount"
+                    if field == "amount":
+                        value = value.replace(",", "").replace("$", "").strip()
+                        tx[field] = float(value) if value else 0.0
+                    else:
+                        tx[field] = value
+            transactions.append(tx)
         except Exception as e:
             logging.warning("Skipping malformed row in %s: %s | Error: %s", section_config["section_name"], row, e)
+            
     logging.info("Parsed %d transactions from section %s", len(transactions), section_config["section_name"])
     return transactions
 
@@ -148,6 +153,39 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
         logging.error("Failed to parse PDF %s: %s", pdf_path, e)
 
     logging.info("Extracted %d transactions from %s", len(transactions), pdf_path.name)
+    return transactions
+
+
+def parse_csv(file_path: pathlib.Path, profile: dict):
+    """
+    Parse TD Visa CSV statement into normalized transactions.
+    """
+    transactions = []
+    with open(file_path, "r") as f:
+        for line in f:
+            row = line.strip().split(",")
+            if not row or len(row) < 5:
+                continue
+
+            tx_date = datetime.strptime(row[0], "%m/%d/%Y").strftime("%Y-%m-%d")
+            desc = row[1].strip()
+            debit = float(row[2]) if row[2] else 0.0
+            credit = float(row[3]) if row[3] else 0.0
+            amount = debit - credit  # normalize: charges positive, payments negative
+            balance = float(row[4]) if row[4] else None
+
+            # Skip footer rows
+            if desc in ["PREVIOUS STATEMENT BALANCE", "TOTAL NEW BALANCE"]:
+                continue
+
+            transactions.append({
+                "transaction_date": tx_date,
+                "description": desc,
+                "amount": amount,
+                "balance": balance,
+                "source": profile["bank_name"],
+                "section": "Transactions"
+            })
     return transactions
 
 
