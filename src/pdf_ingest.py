@@ -156,6 +156,39 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     return transactions
 
 
+def parse_csv(file_path: pathlib.Path, profile: dict):
+    """
+    Parse TD Visa CSV statement into normalized transactions.
+    """
+    transactions = []
+    with open(file_path, "r") as f:
+        for line in f:
+            row = line.strip().split(",")
+            if not row or len(row) < 5:
+                continue
+
+            tx_date = datetime.strptime(row[0], "%m/%d/%Y").strftime("%Y-%m-%d")
+            desc = row[1].strip()
+            debit = float(row[2]) if row[2] else 0.0
+            credit = float(row[3]) if row[3] else 0.0
+            amount = debit - credit  # normalize: charges positive, payments negative
+            balance = float(row[4]) if row[4] else None
+
+            # Skip footer rows
+            if desc in ["PREVIOUS STATEMENT BALANCE", "TOTAL NEW BALANCE"]:
+                continue
+
+            transactions.append({
+                "transaction_date": tx_date,
+                "description": desc,
+                "amount": amount,
+                "balance": balance,
+                "source": profile["bank_name"],
+                "section": "Transactions"
+            })
+    return transactions
+
+
 def export_csv(transactions, out_path: pathlib.Path):
     """
     Write transactions to CSV.
