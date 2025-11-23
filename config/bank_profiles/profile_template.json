@@ -2,30 +2,71 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Bank Profile Config",
   "type": "object",
+  "required": ["bank_name", "sections"],
   "properties": {
-    "bank_name": { "type": "string" },
+    "bank_name": {
+      "type": "string",
+      "description": "Human-readable name of the bank/card"
+    },
     "sections": {
       "type": "array",
+      "description": "List of sections to parse from PDF",
       "items": {
         "type": "object",
+        "required": ["section_name", "match_text", "columns"],
         "properties": {
-          "section_name": { "type": "string" },
-          "match_text": { "type": "string" }, 
+          "section_name": {
+            "type": "string",
+            "description": "Logical name of the section (e.g., Purchases, Payments)"
+          },
+          "match_text": {
+            "type": "string",
+            "description": "Anchor text in PDF to identify section"
+          },
           "columns": {
             "type": "object",
-            "properties": {
-              "transaction_date": { "type": "integer" },
-              "posting_date": { "type": "integer" },
-              "description": { "type": "integer" },
-              "amount": { "type": "integer" }
+            "description": "Mapping of field names to column indices",
+            "patternProperties": {
+              "^[a-zA-Z0-9_]+$": {
+                "type": "integer",
+                "minimum": 0
+              }
             },
-            "required": ["transaction_date", "description", "amount"]
+            "minProperties": 1
           },
-          "skip_footer_rows": { "type": "boolean" }
+          "skip_footer_rows": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "csv_format": {
+      "type": "object",
+      "description": "Optional CSV ingestion rules",
+      "required": ["date_format", "columns"],
+      "properties": {
+        "date_format": {
+          "type": "string",
+          "enum": ["YYYY-MM-DD", "MM/DD/YYYY"],
+          "description": "Date format used in CSV export"
         },
-        "required": ["section_name", "match_text", "columns"]
+        "columns": {
+          "type": "object",
+          "description": "Mapping of CSV fields to column indices",
+          "patternProperties": {
+            "^[a-zA-Z0-9_]+$": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "minProperties": 1
+        },
+        "skip_footer_rows": {
+          "type": "boolean",
+          "default": false
+        }
       }
     }
-  },
-  "required": ["bank_name", "sections"]
+  }
 }
