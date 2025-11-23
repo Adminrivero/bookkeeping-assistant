@@ -11,6 +11,7 @@ import csv
 import re
 import logging
 import json
+import jsonschema
 from datetime import datetime
 
 # Configure logging
@@ -66,7 +67,7 @@ def normalize_filename(pdf_path: pathlib.Path, bank: str):
 
 def load_bank_profile(bank: str):
     """
-    Load a bank profile config from ./config/bank_profiles/<bank>.json.
+    Load and validate a bank profile config from ./config/bank_profiles/<bank>.json.
 
     Args:
         bank (str): Bank identifier (e.g., 'triangle', 'cibc', 'td_visa').
@@ -75,10 +76,19 @@ def load_bank_profile(bank: str):
         dict: Parsed JSON config for the bank.
     """
     profile_path = pathlib.Path(f"./config/bank_profiles/{bank}.json")
+    schema_path = pathlib.Path("./config/bank_profiles/profile_template.json")
+    
     if not profile_path.exists():
         raise FileNotFoundError(f"No profile config found for bank: {bank}")
+    
     with open(profile_path, "r") as f:
-        return json.load(f)
+        profile = json.load(f)
+    
+    with open(schema_path, "r") as f:
+        schema = json.load(f)
+
+    jsonschema.validate(instance=profile, schema=schema)
+    return profile
 
 
 def parse_section(table, section_config, source):
