@@ -69,14 +69,15 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── rules.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── pdf_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── spreadsheet_schema.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── utils.py<br>
-├── tests/ &nbsp;&nbsp;&nbsp; # Unit tests<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_ingest.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── utils.py<br>
+├── tests/ &nbsp;&nbsp; # Unit tests<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_classify.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_rules_integration.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_export.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_ingest.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_pdf_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── test_pipeline.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project_smoke.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_rules_integration.py<br>
 └── docs/ &nbsp;&nbsp;&nbsp; # Extended documentation<br>
 
 ---
