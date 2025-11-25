@@ -56,7 +56,7 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── cibc.json<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── td_visa.json<br>
 ├── data/<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── 2025/ &nbsp;&nbsp;&nbsp; # Input files (bank transactions `.csv`)<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/ &nbsp;&nbsp;&nbsp; # Input files (bank transactions `.csv`)<br>
 ├── output/<br> 
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/bookkeeping_2025.xlsx<br> 
 ├── src/ &nbsp;&nbsp;&nbsp; # Modular components<br>
@@ -64,20 +64,20 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── classify.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── export.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── mapping.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── mapping.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── pipeline.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── rules.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── pdf_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── spreadsheet_schema.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── utils.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── utils.py<br>
 ├── tests/ &nbsp;&nbsp; # Unit tests<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_classify.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_pdf_ingest.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── test_pipeline.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_pipeline.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project_smoke.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_rules_integration.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── test_rules_integration.py<br>
 └── docs/ &nbsp;&nbsp;&nbsp; # Extended documentation<br>
 
 ---
@@ -146,8 +146,8 @@ pytest -v
 For detailed guides, see the docs:
 
 - [**Allocation Ruleset Schema**](.\docs\allocation_ruleset_schema.md) - Reference guide for defining the JSON-driven classification rules
-- **Bank Profiles** – How to add new bank configs
-- **Config Schema** – JSON schema validation rules
+- [**Bank Profiles**](.\docs\bank_profiles.md) – How to add new bank configs
+- [**Config Schema**](.\docs\config_schema.md) – JSON schema validation rules
 - **Rules Creation Assistant** – Guide for defining classification rules
 - [**Module Breakdown**](.\docs\module_breakdown.md) - Describe each core module and its role in the pipeline
 - **Testing** – How to run and extend pytest fixtures
