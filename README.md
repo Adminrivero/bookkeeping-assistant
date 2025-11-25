@@ -147,7 +147,7 @@ For detailed guides, see the docs:
 
 - [**Allocation Ruleset Schema**](.\docs\allocation_ruleset_schema.md) - Reference guide for defining the JSON-driven classification rules
 - [**Bank Profiles**](.\docs\bank_profiles.md) – How to add new bank configs
-- **Config Schema** – JSON schema validation rules
+- [**Config Schema**](.\docs\config_schema.md) – JSON schema validation rules
 - **Rules Creation Assistant** – Guide for defining classification rules
 - [**Module Breakdown**](.\docs\module_breakdown.md) - Describe each core module and its role in the pipeline
 - **Testing** – How to run and extend pytest fixtures
