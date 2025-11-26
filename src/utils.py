@@ -19,6 +19,26 @@ def notify(message: str, level: str = "info"):
         print(message)
 
 
+def setup_paths(year: int) -> tuple[Path, Path]:
+    """
+    Validate input directory and create output directory.
+
+    Args:
+        year (int): Tax year
+
+    Returns:
+        (input_dir, output_dir)
+    """
+    input_dir = Path("data") / str(year)
+    if not input_dir.exists() or not input_dir.is_dir():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+
+    output_dir = Path("output") / str(year)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    return input_dir, output_dir
+
+
 def load_rules(rules_path: Path) -> Dict[str, Any]:
     """Load and validate the JSON allocation rules file."""
     if not Path(rules_path).is_file():
