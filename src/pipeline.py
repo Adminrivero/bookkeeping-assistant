@@ -1,6 +1,8 @@
 """
 pipeline.py
-
+-----------
+Pipeline entrypoint for statement ingestion.
+Routes input files to the correct ingestor (CSV or PDF), ensures normalized output, and handles errors gracefully.
 Defines the orchestration pipeline for bookkeeping automation:
 1. Load rules
 2. Classify transactions
@@ -13,7 +15,33 @@ from src.rules import RuleLoader
 from src.classify import TransactionClassifier
 from src.mapping import map_transaction_to_row
 from src.export import SpreadsheetExporter
-from src.utils import notify
+from src.utils import notify, load_bank_profile
+from src import pdf_ingest, csv_ingest
+import pathlib
+
+def ingest_statement(file_path, bank: str):
+    """
+    Ingest a statement file (CSV or PDF) and normalize to unified transactions.
+    """
+    path = pathlib.Path(file_path)
+    profile = load_bank_profile(bank)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Statement file not found: {file_path}")
+
+    suffix = path.suffix.lower()
+
+    if suffix == ".csv":
+        notify(f"Detected CSV input for {bank}", level="info")
+        return csv_ingest.parse_csv(path, profile)
+
+    elif suffix == ".pdf":
+        notify(f"Detected PDF input for {bank}", level="info")
+        return pdf_ingest.parse_pdf(path, bank)
+
+    else:
+        raise ValueError(f"Unsupported file type: {suffix}")
+
 
 def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bool = True):
     """
