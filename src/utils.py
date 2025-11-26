@@ -19,17 +19,18 @@ def notify(message: str, level: str = "info"):
         print(message)
 
 
-def setup_paths(year: int) -> tuple[Path, Path, list[Path]]:
+def setup_paths(year: int, base_dir: Path = Path("data")) -> tuple[Path, Path, list[Path]]:
     """
-    Validate input directory and create output directory.
+    Validate input directory, find root CSVs, and create output directory.
 
     Args:
         year (int): Tax year
+        base_dir (Path): Base data directory
 
     Returns:
-        (input_dir, output_dir)
+        (input_dir, output_dir, input_files)
     """
-    input_dir = Path("data") / str(year)
+    input_dir = base_dir / str(year)
     if not input_dir.exists() or not input_dir.is_dir():
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 

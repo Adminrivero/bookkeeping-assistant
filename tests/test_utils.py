@@ -24,7 +24,7 @@ def test_setup_paths_success(tmp_path):
     csv_file = year_dir / "account.csv"
     csv_file.write_text("2025-01-01,Deposit,100.00")
 
-    input_dir, output_dir, input_files = setup_paths(2025)
+    input_dir, output_dir, input_files = setup_paths(2025, base_dir=tmp_path)
     assert input_dir.exists()
     assert output_dir.exists()
     assert csv_file in input_files
