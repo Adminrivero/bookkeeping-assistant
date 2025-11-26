@@ -21,10 +21,7 @@ from pathlib import Path
 # -- Local Project Imports ---
 from src.ingest import load_csv
 from src.pipeline import run_pipeline
-from src.utils import notify, use_logging
-
-
-# The rest of your script (functions, constants, main logic) follows here.
+from src.utils import notify, use_logging, load_rules
 
 def main():
     """
@@ -45,8 +42,7 @@ def main():
             handlers=[logging.StreamHandler()]
         )
         # Toggle global flag
-        import src.utils
-        src.utils.use_logging = True
+        use_logging = True
     
     try:
         input_dir, output_dir, input_files = setup_paths(args.year)
@@ -89,6 +85,7 @@ def main():
 
     notify(f"\n✅ Success! Pipeline complete. File saved to {output_file}", level="info")
 
+
 def get_cli_args() -> argparse.Namespace:
     """Parse and return command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -124,6 +121,7 @@ def get_cli_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+
 def setup_paths(year: int) -> tuple[Path, Path, List[Path]]:
     """Validate input directory, find CSVs, and create output directory."""
     input_dir = Path(f"data/{year}")
@@ -139,18 +137,6 @@ def setup_paths(year: int) -> tuple[Path, Path, List[Path]]:
 
     return input_dir, output_dir, input_files
 
-def load_rules(rules_path: Path) -> Dict[str, Any]:
-    """Load and validate the JSON allocation rules file."""
-    if not rules_path.is_file():
-        raise FileNotFoundError(f"Rules file not found: {rules_path}")
-    
-    with open(rules_path, "r") as f:
-        rules = json.load(f)
-    
-    if not isinstance(rules, dict) or "_rules" not in rules:
-        raise TypeError(f"Rules file {rules_path} does not contain a valid JSON object or missing '_rules' key.")
-    
-    return rules
-    
+
 if __name__ == "__main__":
     main()
