@@ -17,6 +17,7 @@ from src.mapping import map_transaction_to_row
 from src.export import SpreadsheetExporter
 from src.utils import notify, load_bank_profile
 from src import pdf_ingest, csv_ingest
+from src.ingest import load_csv as load_account_csv
 import pathlib
 
 def ingest_statement(file_path, bank: str):
@@ -24,12 +25,18 @@ def ingest_statement(file_path, bank: str):
     Ingest a statement file (CSV or PDF) and normalize to unified transactions.
     """
     path = pathlib.Path(file_path)
-    profile = load_bank_profile(bank)
-
     if not path.exists():
         raise FileNotFoundError(f"Statement file not found: {file_path}")
 
     suffix = path.suffix.lower()
+    
+    # Special case: root account CSVs
+    if bank == "account" and suffix == ".csv":
+        notify("Detected account CSV input", level="info")
+        return load_account_csv(str(path))
+    
+    # Credit card banks: require profile
+    profile = load_bank_profile(bank)
 
     if suffix == ".csv":
         notify(f"Detected CSV input for {bank}", level="info")

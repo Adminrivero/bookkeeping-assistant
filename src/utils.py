@@ -19,7 +19,7 @@ def notify(message: str, level: str = "info"):
         print(message)
 
 
-def setup_paths(year: int) -> tuple[Path, Path]:
+def setup_paths(year: int) -> tuple[Path, Path, list[Path]]:
     """
     Validate input directory and create output directory.
 
@@ -36,7 +36,13 @@ def setup_paths(year: int) -> tuple[Path, Path]:
     output_dir = Path("output") / str(year)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    return input_dir, output_dir
+    # Find CSV files inside the year's input directory (top-level only)
+    files = [p for p in input_dir.glob("*.csv") if p.is_file()]
+    if not files:
+        # If no CSVs found in the year folder, raise FileNotFoundError 
+        raise FileNotFoundError(f"No CSV files found in input directory: {input_dir}")
+
+    return input_dir, output_dir, files
 
 
 def load_rules(rules_path: Path) -> Dict[str, Any]:
