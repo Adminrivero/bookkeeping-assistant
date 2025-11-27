@@ -17,7 +17,7 @@ from src.mapping import map_transaction_to_row
 from src.export import SpreadsheetExporter
 from src.utils import notify, load_bank_profile
 from src import pdf_ingest, csv_ingest
-from src.ingest import load_csv as load_account_csv
+from src import ingest as ingest_module
 import pathlib
 
 def ingest_statement(file_path, bank: str):
@@ -33,7 +33,7 @@ def ingest_statement(file_path, bank: str):
     # Special case: root account CSVs
     if bank == "account" and suffix == ".csv":
         notify("Detected account CSV input", level="info")
-        return load_account_csv(str(path))
+        return ingest_module.load_csv(str(path))
     
     # Credit card banks: require profile
     profile = load_bank_profile(bank)
