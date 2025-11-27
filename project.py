@@ -16,12 +16,12 @@ import logging
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-# --- Third-Party / External ---
+# --- Third-Party Libraries ---
 from pathlib import Path
 # -- Local Project Imports ---
 from src.ingest import load_csv
-from src.pipeline import run_pipeline
-from src.utils import notify, use_logging, load_rules
+from src.pipeline import ingest_statement, run_pipeline
+from src.utils import notify, use_logging, load_rules, setup_paths
 
 def main():
     """
@@ -44,37 +44,40 @@ def main():
         # Toggle global flag
         use_logging = True
     
-    try:
-        input_dir, output_dir, input_files = setup_paths(args.year)
-    except FileNotFoundError as e:
-        notify(f"EnvironmentError: {e}", level="error")
-        # print("Please ensure the required data directory exists and contains CSV files.")
-        sys.exit(1)
-    
+    # Load rules
     try:
         rules = load_rules(args.rules)
     except (FileNotFoundError, json.JSONDecodeError, TypeError) as e:
         notify(f"RulesError: {e}", level="error")
-        # print("Please ensure the rules file exists and is a valid JSON.")
         sys.exit(1)
     
-    # Ingest transactions from all CSV files
+    # Discover files
+    try:
+        file_list = discover_files(args.year, args.bank)
+    except FileNotFoundError as e:
+        notify(f"EnvironmentError: {e}", level="error")
+        sys.exit(1)
+    
+    # Ingest transactions
     transactions = []
-    for csv_file in input_files:
+    for file_path, bank in file_list:
         try:
-            txs = load_csv(str(csv_file))
+            txs = ingest_statement(file_path, bank)
             transactions.extend(txs)
+            notify(f"    ✅ Ingested {len(txs)} from {file_path}", level="info")
         except Exception as e:
-            notify(f"Error loading CSV {csv_file}: {e}", level="error")
+            notify(f"Error ingesting {file_path}: {e}", level="error")
             sys.exit(1)
     
-    # Define the final output file path
+    # Define output path
+    output_dir = Path("output") / str(args.year)
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / f"bookkeeping_{args.year}.xlsx"
     
     # Conditionally show progress
     if not args.no_progress:
         notify(f"Starting pipeline for year {args.year}...", level="info")
-        notify(f"Input files found: {len(input_files)}", level="info")
+        notify(f"Input files found: {len(file_list)}", level="info")
         notify(f"Transactions loaded: {len(transactions)}", level="info")
         notify(f"Rules loaded from: {args.rules}", level="info")
         notify(f"Output will be saved to: {output_file}", level="info")
@@ -100,17 +103,17 @@ def get_cli_args() -> argparse.Namespace:
         help="Target financial year to process (default: current year)."
     )
     parser.add_argument(
+        "-b",
+        "--bank",
+        nargs="+",
+        default=[],
+        help="List of bank profile IDs (e.g., 'triangle cibc td_visa')")
+    parser.add_argument(
         "-r",
         "--rules",
         type=Path,
         default=Path("config/allocation_rules.json"),
         help="Path to the JSON allocation rules file (default: config/allocation_rules.json)."
-    )
-    parser.add_argument(
-        "-q",
-        "--no-progress",
-        action="store_true",
-        help="Disable progress bars and verbose status messages."
     )
     parser.add_argument(
         "-l",
@@ -119,23 +122,40 @@ def get_cli_args() -> argparse.Namespace:
         action="store_true",
         help="Enable logging output instead of print statements."
     )
+    parser.add_argument(
+        "-q",
+        "--no-progress",
+        action="store_true",
+        help="Disable progress bars and verbose status messages."
+    )
     return parser.parse_args()
 
 
-def setup_paths(year: int) -> tuple[Path, Path, List[Path]]:
-    """Validate input directory, find CSVs, and create output directory."""
-    input_dir = Path(f"data/{year}")
-    if not input_dir.exists() or not input_dir.is_dir():
-        raise FileNotFoundError(f"Input directory not found: {input_dir}")
-    
-    input_files = list(input_dir.glob("*.csv"))
-    if not input_files:
-        raise FileNotFoundError(f"No CSV files found in input directory: {input_dir}")
-    
-    output_dir = Path(f"output/{year}")
-    output_dir.mkdir(parents=True, exist_ok=True)
+def discover_files(year: int, banks: list[str]) -> list[tuple[Path, str]]:
+    """
+    Discover statement files for the given year and banks.
 
-    return input_dir, output_dir, input_files
+    Returns:
+        list of (file_path, bank_id) tuples
+    """
+    input_dir, _, csv_files = setup_paths(year)
+    files = []
+
+    # Ingest root CSVs (bank accounts activity)
+    for f in csv_files:
+        files.append((f, "account"))
+
+    # Ingest statements for each bank subfolders (credit card statements)
+    for bank in banks:
+        bank_dir = input_dir / bank
+        if not bank_dir.exists():
+            notify(f"⚠️ Bank directory not found: {bank_dir}", level="warning")
+            continue
+        for f in bank_dir.glob("*.*"):
+            if f.suffix.lower() in [".csv", ".pdf"]:
+                files.append((f, bank))
+
+    return files
 
 
 if __name__ == "__main__":
