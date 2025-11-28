@@ -1,5 +1,6 @@
-import logging
+import sys
 import json
+import logging
 import jsonschema
 from pathlib import Path
 from typing import Any, Dict
@@ -16,7 +17,45 @@ def notify(message: str, level: str = "info"):
         log_fn = getattr(logging, level, logging.info)
         log_fn(message)
     else:
-        print(message)
+        # print(message)
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            # Fallback: write bytes to stdout.buffer encoded as utf-8
+            try:
+                # ensure a newline too
+                sys.stdout.buffer.write((message + "\n").encode("utf-8"))
+                sys.stdout.buffer.flush()
+            except Exception:
+                # Last-resort fallback: print ASCII with replacement to avoid raising
+                print(message.encode("ascii", errors="replace").decode("ascii"))
+
+
+def setup_paths(year: int, base_dir: Path = Path("data")) -> tuple[Path, Path, list[Path]]:
+    """
+    Validate input directory, find root CSVs, and create output directory.
+
+    Args:
+        year (int): Tax year
+        base_dir (Path): Base data directory
+
+    Returns:
+        (input_dir, output_dir, input_files)
+    """
+    input_dir = base_dir / str(year)
+    if not input_dir.exists() or not input_dir.is_dir():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+
+    output_dir = Path("output") / str(year)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find CSV files inside the year's input directory (top-level only)
+    files = [p for p in input_dir.glob("*.csv") if p.is_file()]
+    if not files:
+        # If no CSVs found in the year folder, raise FileNotFoundError 
+        raise FileNotFoundError(f"No CSV files found in input directory: {input_dir}")
+
+    return input_dir, output_dir, files
 
 
 def load_rules(rules_path: Path) -> Dict[str, Any]:
