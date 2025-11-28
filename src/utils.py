@@ -1,5 +1,6 @@
-import logging
+import sys
 import json
+import logging
 import jsonschema
 from pathlib import Path
 from typing import Any, Dict
@@ -16,7 +17,18 @@ def notify(message: str, level: str = "info"):
         log_fn = getattr(logging, level, logging.info)
         log_fn(message)
     else:
-        print(message)
+        # print(message)
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            # Fallback: write bytes to stdout.buffer encoded as utf-8
+            try:
+                # ensure a newline too
+                sys.stdout.buffer.write((message + "\n").encode("utf-8"))
+                sys.stdout.buffer.flush()
+            except Exception:
+                # Last-resort fallback: print ASCII with replacement to avoid raising
+                print(message.encode("ascii", errors="replace").decode("ascii"))
 
 
 def setup_paths(year: int, base_dir: Path = Path("data")) -> tuple[Path, Path, list[Path]]:
