@@ -8,6 +8,7 @@ import pathlib
 import tempfile
 import csv
 import pytest
+from pathlib import Path
 from src import pdf_ingest
 
 # --- Fixtures ---
@@ -169,3 +170,29 @@ def test_parse_pdf_td_visa(td_visa_profile):
     assert len(txs) == 3
     assert txs[0]["description"].startswith("TIM HORTONS")
     assert txs[1]["amount"] == -404.15
+
+def test_parse_pdf_normalization(monkeypatch, tmp_path):
+    # Fake PDF file
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_text("%PDF-1.4 fake content")
+
+    # Monkeypatch parse_pdf to simulate parsed output
+    monkeypatch.setattr(pdf_ingest, "parse_pdf", lambda f, p: [
+        {"transaction_date": "2025-05-01", "description": "Purchase", "amount": -50.00,
+         "balance": 950.00, "source": "CIBC", "section": "Transactions"}
+    ])
+
+    result = pdf_ingest.parse_pdf(pdf_file, "cibc")
+    assert isinstance(result, list)
+    tx = result[0]
+    assert set(tx.keys()) == {"transaction_date", "description", "amount", "balance", "source", "section"}
+
+def test_parse_pdf_error(monkeypatch, tmp_path):
+    pdf_file = tmp_path / "corrupt.pdf"
+    pdf_file.write_text("not a real pdf")
+
+    # Monkeypatch to raise error
+    monkeypatch.setattr(pdf_ingest, "parse_pdf", lambda f, p: (_ for _ in ()).throw(ValueError("Malformed PDF")))
+
+    with pytest.raises(ValueError):
+        pdf_ingest.parse_pdf(pdf_file, "cibc")
