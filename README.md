@@ -55,8 +55,15 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── triangle.json<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── cibc.json<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── td_visa.json<br>
-├── data/<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/ &nbsp;&nbsp;&nbsp; # Input files (bank transactions `.csv`)<br>
+├── data/ &nbsp;&nbsp;&nbsp; # Input files<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/ &nbsp;&nbsp;&nbsp; # Tax year with transaction files<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── account.csv &nbsp;&nbsp;&nbsp; # Bank account activity/transactions (`.csv`)<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── triangle/ &nbsp;&nbsp;&nbsp; # Credit card statements from Triangle MasterCard (`.pdf`)<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │ &nbsp;&nbsp;&nbsp;&nbsp; ├── triangle_jan.pdf<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │ &nbsp;&nbsp;&nbsp;&nbsp; └── triangle_feb.pdf<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── td_visa/ &nbsp;&nbsp;&nbsp; # Statements from TD Visa (`.pdf` or `.csv`)<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── td_visa_mar.pdf<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── td_visa_apr.csv<br>
 ├── output/<br> 
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/bookkeeping_2025.xlsx<br> 
 ├── src/ &nbsp;&nbsp;&nbsp; # Modular components<br>
@@ -84,30 +91,40 @@ bookkeeping-assistant/<br>
 
 ## 🚀 Getting Started
 
-1. Clone the repo:
+To get the Bookkeeping Assistant running, you must first define your transaction classification rules.
+
+1. **Clone the Repository**:
 
    ```bash
    git clone https://github.com/Adminrivero/bookkeeping-assistant.git
    cd bookkeeping-assistant
    ```
 
-2. Install dependencies:
+2. **Install Dependencies**:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Place your bank and credit card CSV/PDF files in `data/{year}/`.
+3. **Define Classification Rules (Crucial Step)**: The assistant requires a set of rules to categorize and allocate transactions.
 
-4. Run the assistant:
+   - **In v2.0**: Use the dedicated **Rule Generator Wizard** (`rulegen.py`) to guide you through creating your classification rules and saving them to `./config/allocation_rules.json`.
+
+   - *(Alternatively, you can manually create or edit the `./config/allocation_rules.json` file if you are familiar with the schema.)*
+
+4. **Place Input Files**: Place your bank and credit card **CSV/PDF files** into the appropriate directories within `data/{year}/`.
+
+5. **Run the Assistant**:
+
    ```bash
    python project.py --year 2025
    ```
-5. View the generated spreadsheet in `output/{year}/`.
+
+6. **View Output**: View the generated spreadsheet in `output/{year}/`.
 
 ---
 
-## 🖥️ Usage
+## 🖥️ CLI Usage
 
 Run the assistant from the command line:
 
@@ -119,17 +136,33 @@ python project.py --year 2025
 
 - `--year <YEAR>` or `-y <YEAR>` -> Target financial year (default: current year)
 
+- `--bank <BANK_ID...>` or `-b <BANK_ID...>` -> One or more bank/institution IDs. This enables credit card statement ingestion.
+
 - `--rules <PATH>` or `-r <PATH>` -> Path to JSON allocation rules (default: `config/allocation_rules.json`)
 
 - `--log` or `-l` -> Enable logging output
 
 - `--no-progress` or `-q` -> Disable progress bar
 
-Example:
+### Examples:
 
-```bash
-python project.py --year 2024 --rules config/allocation_rules.json --log
-```
+1. **Default Bank Account Ingestion** (CSVs only, from `./data/2024/` root input directory)
+
+    ```bash
+    python project.py --year 2024 --log
+    ```
+
+2. **Ingestion with Credit Card Statements** (Auto-detects files (PDF or CSV) under `./data/2025/triangle/` and `./data/2025/cibc/` subdirectories)
+
+    ```bash
+    python project.py --year 2025 --bank triangle cibc
+    ```
+
+3. **Indicating Specific Allocation Rules** (Processing 2024 data using a custom ruleset and enabling detailed logging)
+
+    ```bash
+    python project.py --year 2024 --rules config/allocation_rules_2024.json --log
+    ```
 
 ---
 
@@ -146,12 +179,13 @@ pytest -v
 For detailed guides, see the docs:
 
 - [**Allocation Ruleset Schema**](./docs/allocation_ruleset_schema.md) - Reference guide for defining the JSON-driven classification rules
+- **Rules Creation Assistant** – Guide for defining classification rules
+- [**PDF Ingestion**](./docs/pdf_ingestion.md) – How to place PDFs in `data/{year}/bank/` and run CLI
 - [**Bank Profiles**](./docs/bank_profiles.md) – How to add new bank configs
 - [**Config Schema**](./docs/config_schema.md) – JSON schema validation rules
-- **Rules Creation Assistant** – Guide for defining classification rules
 - [**Module Breakdown**](./docs/module_breakdown.md) - Describe each core module and its role in the pipeline
-- **Testing** – How to run and extend pytest fixtures
-- **Contributing** – Workflow, branches, commit hygiene
+- [**Testing**](./docs/testing.md) – How to run and extend pytest fixtures
+- [**Contributing**](./docs/contributing.md) – Workflow, branches, commit hygiene
 
 ---
 
@@ -160,4 +194,3 @@ For detailed guides, see the docs:
 - Classification rules can be updated in `config/allocation_rules.json`.
 - Ambiguous transactions will be flagged for manual review in the Notes column.
 - Logging can be enabled with `--log` or `-l` for detailed transparency.
-- Future enhancements may include PDF ingestion, fuzzy matching, and CI integration.
