@@ -184,8 +184,8 @@ For detailed guides, see the docs:
 - [**Bank Profiles**](./docs/bank_profiles.md) – How to add new bank configs
 - [**Config Schema**](./docs/config_schema.md) – JSON schema validation rules
 - [**Module Breakdown**](./docs/module_breakdown.md) - Describe each core module and its role in the pipeline
-- **Testing** – How to run and extend pytest fixtures
-- **Contributing** – Workflow, branches, commit hygiene
+- [**Testing**](./docs/testing.md) – How to run and extend pytest fixtures
+- [**Contributing**](./docs/contributing.md) – Workflow, branches, commit hygiene
 
 ---
 
