@@ -4,7 +4,6 @@
     "vertical_strategy": "text",
     "horizontal_strategy": "lines",
     "snap_tolerance": 5,
-    "v_tolerance": 5,
     "min_words_vertically": 1,
     "min_words_horizontally": 1
   },
