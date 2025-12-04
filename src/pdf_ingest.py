@@ -9,17 +9,10 @@ import pathlib
 import pdfplumber
 import csv
 import re
-import logging
 import json
 import jsonschema
 from datetime import datetime
-from src.utils import load_bank_profile
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+from src.utils import load_bank_profile, notify
 
 def discover_pdfs(year_dir: str):
     """
@@ -32,7 +25,8 @@ def discover_pdfs(year_dir: str):
         list[pathlib.Path]: Sorted list of PDF file paths.
     """
     pdfs = sorted(pathlib.Path(year_dir).rglob("*.pdf"))
-    logging.info("Discovered %d PDF files in %s", len(pdfs), year_dir)
+    notify("Discovered %d PDF files in %s" % (len(pdfs), year_dir), "info")
+    
     return pdfs
 
 
@@ -59,10 +53,11 @@ def normalize_filename(pdf_path: pathlib.Path, bank: str):
                 new_path = pdf_path.with_name(new_name)
                 if pdf_path.name != new_name:
                     pdf_path.rename(new_path)
-                    logging.info("Renamed %s → %s", pdf_path.name, new_name)
+                    notify("Renamed %s → %s" % (pdf_path.name, new_name), "info")
                 return new_path
     except Exception as e:
-        logging.warning("Failed to normalize filename for %s: %s", pdf_path, e)
+        notify("Failed to normalize filename for %s: %s" % (pdf_path, e), "warning")
+    
     return pdf_path
 
 
@@ -80,7 +75,7 @@ def parse_section(table, section_config, source):
     """
     transactions = []
     if not table or len(table) < 2:
-        logging.warning("Empty or malformed table in section %s", section_config["section_name"])
+        notify("Empty or malformed table in section %s" % section_config["section_name"], "warning")
         return transactions
 
     cols = section_config["columns"]
@@ -106,9 +101,9 @@ def parse_section(table, section_config, source):
                         tx[field] = value
             transactions.append(tx)
         except Exception as e:
-            logging.warning("Skipping malformed row in %s: %s | Error: %s", section_config["section_name"], row, e)
+            notify("Skipping malformed row in %s: %s | Error: %s" % (section_config["section_name"], row, e), "warning")
             
-    logging.info("Parsed %d transactions from section %s", len(transactions), section_config["section_name"])
+    notify("Parsed %d transactions from section %s" % (len(transactions), section_config["section_name"]), "info")
     return transactions
 
 
@@ -135,9 +130,9 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                         table = page.extract_table()
                         transactions.extend(parse_section(table, section, profile["bank_name"]))
     except Exception as e:
-        logging.error("Failed to parse PDF %s: %s", pdf_path, e)
+        notify("Failed to parse PDF %s: %s" % (pdf_path, e), "error")
 
-    logging.info("Extracted %d transactions from %s", len(transactions), pdf_path.name)
+    notify("Extracted %d transactions from %s" % (len(transactions), pdf_path.name), "info")
     return transactions
 
 
@@ -146,6 +141,7 @@ def parse_csv(file_path: pathlib.Path, profile: dict):
     Parse TD Visa CSV statement into normalized transactions.
     """
     transactions = []
+    
     with open(file_path, "r") as f:
         for line in f:
             row = line.strip().split(",")
@@ -171,6 +167,7 @@ def parse_csv(file_path: pathlib.Path, profile: dict):
                 "source": profile["bank_name"],
                 "section": "Transactions"
             })
+    
     return transactions
 
 
@@ -189,9 +186,9 @@ def export_csv(transactions, out_path: pathlib.Path):
             writer.writeheader()
             for tx in transactions:
                 writer.writerow(tx)
-        logging.info("Exported %d transactions to %s", len(transactions), out_path)
+        notify("Exported %d transactions to %s" % (len(transactions), out_path), "info")
     except Exception as e:
-        logging.error("Failed to export CSV %s: %s", out_path, e)
+        notify("Failed to export CSV %s: %s" % (out_path, e), "error")
 
 
 def ingest_year(year: str, bank: str = "triangle"):
@@ -204,10 +201,12 @@ def ingest_year(year: str, bank: str = "triangle"):
     """
     pdfs = discover_pdfs(f"./data/{year}/")
     all_tx = []
+    
     for pdf in pdfs:
         normalized_pdf = normalize_filename(pdf, bank)
         tx = parse_pdf(normalized_pdf, bank)
         export_csv(tx, pathlib.Path(f"./output/{year}/{bank}/{normalized_pdf.stem}.csv"))
         all_tx.extend(tx)
+        
     # unified CSV
     export_csv(sorted(all_tx, key=lambda x: x["transaction_date"]), pathlib.Path(f"./output/{year}/credit_cards.csv"))
