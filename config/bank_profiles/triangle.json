@@ -1,5 +1,13 @@
 {
   "bank_name": "Triangle MasterCard",
+  "table_settings": {
+    "vertical_strategy": "text",
+    "horizontal_strategy": "lines",
+    "snap_tolerance": 5,
+    "v_tolerance": 5,
+    "min_words_vertically": 1,
+    "min_words_horizontally": 1
+  },
   "sections": [
     {
       "section_name": "Payments",
@@ -10,6 +18,12 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": [
+        "TRANSACTION DATE", 
+        "POSTING DATE", 
+        "TRANSACTION DESCRIPTION", 
+        "AMOUNT ($)"
+      ],
       "skip_footer_rows": true
     },
     {
@@ -21,6 +35,12 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": [
+        "TRANSACTION DATE", 
+        "POSTING DATE", 
+        "TRANSACTION DESCRIPTION", 
+        "AMOUNT ($)"
+      ],
       "skip_footer_rows": true
     },
     {
@@ -32,6 +52,12 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": [
+        "TRANSACTION DATE", 
+        "POSTING DATE", 
+        "TRANSACTION DESCRIPTION", 
+        "AMOUNT ($)"
+      ],
       "skip_footer_rows": true
     },
     {
@@ -43,6 +69,12 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": [
+        "TRANSACTION DATE", 
+        "POSTING DATE", 
+        "TRANSACTION DESCRIPTION", 
+        "AMOUNT ($)"
+      ],
       "skip_footer_rows": true
     }
   ]
