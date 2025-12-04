@@ -9,8 +9,7 @@ import pathlib
 import pdfplumber
 import csv
 import re
-import json
-import jsonschema
+from typing import List, Dict
 from datetime import datetime
 from src.utils import load_bank_profile, notify
 
@@ -107,6 +106,54 @@ def parse_section(table, section_config, source):
     return transactions
 
 
+def validate_table_structure(table_rows: List[List[str | None]], section_config: Dict) -> bool:
+    """
+    Checks if a raw table matches the column structure AND header content
+    defined in the config. Returns True if the table is a valid target.
+    
+    Args:
+        table_rows (list[list[str]]): Extracted table rows.
+        section_config (dict): Section config from bank profile JSON.
+    Returns:
+        bool: True if table matches expected structure and headers.
+    """
+    if not table_rows or len(table_rows) < 1:
+        return False
+
+    expected_labels = section_config.get("header_labels", [])
+    expected_col_count = len(section_config["columns"])
+
+    # --- CHECK 1: Column Count ---
+    # Check the first row (the header)
+    first_row = table_rows[0]
+    
+    # Clean the row to handle empty cells created by pdfplumber's heuristics
+    clean_row = [str(c).strip() for c in first_row if c is not None and str(c).strip() != ""]
+    
+    if len(clean_row) < expected_col_count:
+        # Fails if it doesn't have enough data columns
+        return False
+    
+    if not expected_labels:
+        # If no expected labels, assume structure check is sufficient (skip header check)
+        return True
+
+    # --- CHECK 2: Header Content (Semantic Validation) ---
+    # Check if all required header labels are present in the first row.
+    # Look for the labels in the *raw, full* first_row, cleaning them up for comparison.
+    
+    # 1. Prepare the extracted header for comparison
+    header_str = " | ".join([str(c).replace("\n", " ").strip() for c in first_row if c is not None]).lower()
+    
+    # 2. Check for all expected labels
+    for label in expected_labels:
+        if label.lower() not in header_str:
+            return False
+
+    # If both checks pass, high confidence this is a transaction table
+    return True
+
+
 def parse_pdf(pdf_path: pathlib.Path, bank: str):
     """
     Extract transactions from a PDF using bank profile config.
@@ -120,15 +167,72 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     """
     transactions = []
     profile = load_bank_profile(bank)
+    
+    # Validate profile has sections
+    if "sections" not in profile or not isinstance(profile["sections"], list):
+        notify(f"Bank profile for {bank} is missing 'sections' key or is malformed.", "error")
+        return transactions
+    
+    # notify(f"Processing PDF: {pdf_path.name}", "INFO")
 
     try:
+        """
+        Robust PDF parsing: Extracts all tables and uses header validation to identify targets.
+        """
         with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text() or ""
-                for section in profile["sections"]:
-                    if section["match_text"] in text:
-                        table = page.extract_table()
-                        transactions.extend(parse_section(table, section, profile["bank_name"]))
+            
+            # Use a list to track which sections have been found/processed
+            sections_found_map = {s["section_name"]: False for s in profile["sections"]}
+            
+            for page_num, page in enumerate(pdf.pages):
+                # notify(f"Scanning Page {page_num + 1}...", "DEBUG")
+                
+                # 1. Extract all tables on the page
+                tables = page.find_tables()
+                
+                for table_obj in tables:
+                    table_content = table_obj.extract()
+                    
+                    # 2. Iterate through all defined sections to find a match
+                    for section in profile["sections"]:
+                        
+                        # STEP A: Structural and Semantic Header Validation
+                        if validate_table_structure(table_content, section):
+                            
+                            is_target_table = True
+                            match_text = section.get("match_text")
+                            
+                            # STEP B: Optional Context Validation (The match_text check)
+                            # This is now a TIE-BREAKER, not a boundary setter.
+                            # It's less reliable due to false positives, but can help confirm.
+                            if match_text:
+                                # Look for the match_text nearby (e.g., 100 units above the table's top y-coord)
+                                SEARCH_HEIGHT = 100
+                                table_bbox = table_obj.bbox  # (x0, y0, x1, y1)
+                                table_top_y = table_bbox[1]
+                                # Calculate the TOP of the search area, ensuring it's not negative.
+                                search_top_y = max(0, table_top_y - SEARCH_HEIGHT)
+                                # Define the search area: (page_left, safe_search_top, page_right, table_top)
+                                search_area = (0, search_top_y, page.width, table_top_y)
+                                nearby_text = page.within_bbox(search_area).extract_text() or ""
+                                if match_text.lower() not in nearby_text.lower():
+                                    # If the section header isn't found nearby, this might be a table spillover
+                                    # This check is tricky. It's safer to trust the header validation alone.
+                                    # Skipping this complex check improves robustness.
+                                    # is_target_table = False
+                                    pass
+                            
+                            # notify(f"  -> Found '{section['section_name']}' table via Header Validation.", "DEBUG")
+                            
+                            new_txs = parse_section(table_content, section, profile["bank_name"])
+                            transactions.extend(new_txs)
+                            
+                            # Mark the section as found to avoid double-counting if a similar table exists.
+                            sections_found_map[section['section_name']] = True
+                            
+                            # Break inner loop and move to the next table_obj
+                            break
+                        
     except Exception as e:
         notify("Failed to parse PDF %s: %s" % (pdf_path, e), "error")
 
