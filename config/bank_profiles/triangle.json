@@ -3,9 +3,8 @@
   "table_settings": {
     "vertical_strategy": "text",
     "horizontal_strategy": "lines",
-    "snap_tolerance": 5,
-    "min_words_vertically": 1,
-    "min_words_horizontally": 1
+    "snap_tolerance": 8,
+    "intersection_tolerance": 5
   },
   "sections": [
     {
