@@ -1,5 +1,6 @@
 {
   "bank_name": "Triangle MasterCard",
+  "skip_pages_by_index": [0],
   "table_settings": {
     "vertical_strategy": "text",
     "horizontal_strategy": "lines",
