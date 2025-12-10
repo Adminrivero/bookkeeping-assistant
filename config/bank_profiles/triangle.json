@@ -2,10 +2,15 @@
   "bank_name": "Triangle MasterCard",
   "skip_pages_by_index": [0],
   "table_settings": {
-    "vertical_strategy": "text",
-    "horizontal_strategy": "lines",
-    "snap_tolerance": 8,
-    "intersection_tolerance": 5
+    "vertical_strategy": "explicit",
+    "explicit_vertical_lines": [30, 120, 200, 480, 570],
+    "horizontal_strategy": "text",
+    "snap_tolerance": 5,
+    "join_tolerance": 5,
+    "intersection_tolerance": 5,
+    "text_tolerance": 3,
+    "min_words_vertical": 2,
+    "min_words_horizontal": 1
   },
   "sections": [
     {
@@ -23,7 +28,8 @@
         "TRANSACTION DESCRIPTION", 
         "AMOUNT ($)"
       ],
-      "skip_footer_rows": true
+      "skip_footer_rows": true,
+      "crop_bbox_offset": [0, 50, 0, 200]
     },
     {
       "section_name": "Credits",
@@ -40,7 +46,8 @@
         "TRANSACTION DESCRIPTION", 
         "AMOUNT ($)"
       ],
-      "skip_footer_rows": true
+      "skip_footer_rows": true,
+      "crop_bbox_offset": [0, 50, 0, 200]
     },
     {
       "section_name": "Purchases",
@@ -57,7 +64,8 @@
         "TRANSACTION DESCRIPTION", 
         "AMOUNT ($)"
       ],
-      "skip_footer_rows": true
+      "skip_footer_rows": true,
+      "crop_bbox_offset": [0, 50, 0, 300]
     },
     {
       "section_name": "Interest",
@@ -74,7 +82,8 @@
         "TRANSACTION DESCRIPTION", 
         "AMOUNT ($)"
       ],
-      "skip_footer_rows": true
+      "skip_footer_rows": true,
+      "crop_bbox_offset": [0, 50, 0, 100]
     }
   ]
 }
