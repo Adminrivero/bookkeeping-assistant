@@ -154,6 +154,102 @@ def validate_table_structure(table_rows: List[List[str | None]], section_config:
     return True
 
 
+def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
+    transactions = []
+    profile = load_bank_profile(bank)
+    
+    table_settings = profile.get("table_settings", {})
+    skip_pages = profile.get('skip_pages_by_index', [])
+    sections = profile.get("sections", [])
+    
+    all_data = {section['section_name']: [] for section in sections}
+    
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_num, page in enumerate(pdf.pages):
+            if page_num in skip_pages:
+                continue
+            
+            page_text = page.extract_text() or ""
+            
+            for section in sections:
+                match_text = section.get("match_text")
+                if match_text not in page_text:
+                    continue  # Section not on this page
+                
+                # Locate match_text bbox to crop around table (avoids sidebar interference)
+                search_results = page.search(match_text, return_groups=False)
+                if not search_results:
+                    continue
+                
+                # Get bbox of the first occurrence: pdfplumber search() returns a dict with keys
+                # like 'x0', 'top', 'x1', 'bottom' (not a 'bbox' field).
+                sr = search_results[0]
+                title_bbox = (
+                    sr.get("x0", sr.get("left", 0)),
+                    sr.get("top", sr.get("y0", 0)),
+                    sr.get("x1", sr.get("right", page.width)),
+                    sr.get("bottom", sr.get("y1", page.height))
+                )
+                
+                # Apply offsets for crop (left, top, right, bottom); adjust if needed
+                offset = section.get('crop_bbox_offset', [0, 50, 0, 200])
+                crop_box = (
+                    title_bbox[0] - offset[0],   # left
+                    title_bbox[1] - offset[1],   # top (above title)
+                    page.width - offset[2],      # right (full width minus offset)
+                    title_bbox[3] + offset[3]    # bottom (below title)
+                )
+                cropped_page = page.crop(crop_box)
+                
+                # Find and extract tables from cropped area
+                tables = cropped_page.find_tables(table_settings=table_settings)
+                
+                for table in tables:
+                    extracted_table = table.extract()
+                    
+                    # Validate: Check if first row matches header_labels (allow partial match for robustness)
+                    if extracted_table and len(extracted_table[0]) >= 4:
+                        # Ensure start_row is always defined (default to 0 if not provided in profile)
+                        start_row = section.get('skip_header_rows', 0)
+                        # Normalize the header cells into a single string for matching (avoid None, handle newlines)
+                        header_text = " ".join([str(c).replace("\n", " ").strip() for c in extracted_table[0] if c is not None]).lower()
+                        if all(hl.lower() in header_text for hl in section.get('header_labels', [])):
+                            # Skip header rows
+                            start_row = section.get('skip_header_rows', 0)
+                        
+                        # Process rows
+                        for row in extracted_table[start_row:]:
+                            # Handle merged cells (e.g., colspan in Purchases subheader)
+                            row = [cell for cell in row if cell]  # Remove None
+                            if len(row) < 4:
+                                continue  # Skip incomplete/subheader rows
+                            
+                            # Skip footer if enabled (e.g., contains "Total")
+                            if section.get('skip_footer_rows', False) and "Total" in ' '.join(row):
+                                continue
+                            
+                            # Map to columns
+                            transaction = {
+                                "transaction_date": row[section['columns']['transaction_date']],
+                                "posting_date": row[section['columns']['posting_date']],
+                                "description": row[section['columns']['description']],
+                                "amount": row[section['columns']['amount']]
+                            }
+                            all_data[section['section_name']].append(transaction)
+                        
+                        print(f"Extracted {len(all_data[section['section_name']])} rows for {section['section_name']}")
+                    
+                    # Debug: Save annotated image (uncomment to visualize)
+                    # im = cropped_page.to_image()
+                    # im.debug_tablefinder(table_settings)
+                    # im.save(f"debug_{section['section_name']}_page{page_num+1}.png")
+
+    # Combine and save all transactions
+    for section_name, txs in all_data.items():
+        transactions.extend(txs)
+    return transactions
+    
+
 def parse_pdf(pdf_path: pathlib.Path, bank: str):
     """
     Extract transactions from a PDF using bank profile config.
@@ -168,10 +264,20 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     transactions = []
     profile = load_bank_profile(bank)
     
+    # Start debug mode
+    # df = debug_parse_pdf(pdf_path, bank)
+    # print(df)
+    # End debug mode
+    
     # Validate profile has sections
     if "sections" not in profile or not isinstance(profile["sections"], list):
         notify(f"Bank profile for {bank} is missing 'sections' key or is malformed.", "error")
         return transactions
+    
+    # Extract table settings from profile, falling back to an empty dict
+    table_settings = profile.get("table_settings", {})
+    # Pages to skip (0-indexed)
+    skip_pages = profile.get('skip_pages_by_index', [])
     
     # notify(f"Processing PDF: {pdf_path.name}", "INFO")
 
@@ -185,10 +291,13 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
             sections_found_map = {s["section_name"]: False for s in profile["sections"]}
             
             for page_num, page in enumerate(pdf.pages):
+                if page_num in skip_pages:
+                    continue
+                
                 # notify(f"Scanning Page {page_num + 1}...", "DEBUG")
                 
                 # 1. Extract all tables on the page
-                tables = page.find_tables()
+                tables = page.find_tables(table_settings=table_settings)
                 
                 for table_obj in tables:
                     table_content = table_obj.extract()
