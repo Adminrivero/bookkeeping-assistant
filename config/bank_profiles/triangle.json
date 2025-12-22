@@ -3,14 +3,15 @@
   "skip_pages_by_index": [0],
   "table_settings": {
     "vertical_strategy": "explicit",
-    "explicit_vertical_lines": [30, 120, 200, 480, 570],
+    "explicit_vertical_lines": [],
     "horizontal_strategy": "text",
+    "text_x_tolerance": 25,
+    "text_y_tolerance": 4,
+    "min_words_vertical": 1,
+    "min_words_horizontal": 1,
+    "intersection_tolerance": 15,
     "snap_tolerance": 5,
-    "join_tolerance": 5,
-    "intersection_tolerance": 5,
-    "text_tolerance": 3,
-    "min_words_vertical": 2,
-    "min_words_horizontal": 1
+    "join_tolerance": 5
   },
   "sections": [
     {
@@ -22,14 +23,8 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
-      "skip_footer_rows": true,
-      "crop_bbox_offset": [0, 50, 0, 200]
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "skip_footer_rows": true
     },
     {
       "section_name": "Credits",
@@ -40,14 +35,8 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
-      "skip_footer_rows": true,
-      "crop_bbox_offset": [0, 50, 0, 200]
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "skip_footer_rows": true
     },
     {
       "section_name": "Purchases",
@@ -58,14 +47,8 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
-      "skip_footer_rows": true,
-      "crop_bbox_offset": [0, 50, 0, 300]
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "skip_footer_rows": true
     },
     {
       "section_name": "Interest",
@@ -76,14 +59,8 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
-      "skip_footer_rows": true,
-      "crop_bbox_offset": [0, 50, 0, 100]
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "skip_footer_rows": true
     }
   ]
 }
