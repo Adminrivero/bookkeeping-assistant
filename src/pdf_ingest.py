@@ -4,14 +4,23 @@ PDF Ingestion Module for Credit Card Statements
 This module discovers, normalizes, parses, and exports transactions
 from credit card statement PDFs (e.g., Triangle MasterCard).
 """
-
-import pathlib
-import pdfplumber
+import os
+import sys
 import csv
 import re
-from typing import List, Dict
+import pathlib
+import pdfplumber
+import time
+import tempfile
+import webbrowser, pathlib
+from typing import List, Dict, Optional
 from datetime import datetime
 from src.utils import load_bank_profile, notify
+
+def _auto_detect_debug() -> bool:
+    """Auto-detect debug mode via environment or attached debugger."""
+    if os.getenv("VSCODE_DEBUGGING") == "1": return True
+    return sys.gettrace() is not None
 
 def discover_pdfs(year_dir: str):
     """
@@ -154,10 +163,151 @@ def validate_table_structure(table_rows: List[List[str | None]], section_config:
     return True
 
 
-def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
-    transactions = []
-    profile = load_bank_profile(bank)
+def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename: Optional[str] = None):
+    """
+    Visualize a cropped area of a PDF page by drawing a red rectangle.
+    Args:
+        page: pdfplumber Page object.
+        crop_bbox: (x0, top, x1, bottom) tuple defining the crop area.
+        action: "save", "show", or "both". Defaults to "save".
+        filename: Optional filename when action includes "save".
+    Returns:
+        str|None: Path to saved file if saved, otherwise None.
+    """
+    # Crop and render
+    search_strip = page.crop(crop_bbox)
+    im = search_strip.to_image()
+    im.draw_rects([search_strip.bbox], stroke="red", fill=None)
+
+    action = action.lower()
+    base_path = pathlib.Path.cwd() / ".pydebug"
+    saved_path = None
+
+    if "save" in action:
+        if not filename:
+            filename = f"debug_search_strip_{int(time.time())}.png"
+        if not base_path.exists():
+            base_path.mkdir(parents=True)
+        im.save(base_path / filename)
+        saved_path = base_path / filename
+
+    if "show" in action:
+        # Try to show via PIL; fallback to opening saved file in the default viewer
+        try:
+            im.original.show()
+        except Exception:
+            if saved_path is None:
+                tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                im.save(tmp.name)
+                saved_path = tmp.name
+            webbrowser.open(pathlib.Path(saved_path).as_uri())
+
+    return saved_path
+
+
+def get_header_bbox(page, match_text, crop_bbox = None):
+    """Finds the bounding box of the specific match text."""
+    results = (page.crop(crop_bbox) if crop_bbox else page).search(match_text)
+    if results:
+        # Return the first match's dict (x0, top, x1, bottom)
+        return results[0] 
+    return None
+
+
+def get_label_edge(page, search_area_bbox, label_text, edge="left", margin=0):
+    """
+    Finds a specific header label within a vertical area and returns its edge.
+    edge: "left" (returns x0 - margin) or "right" (returns x1 + margin)
+    """
+    # Create a vertical strip to search in
+    search_strip = page.crop(search_area_bbox)
     
+    # Debug section: visualize search area
+    if _auto_detect_debug():
+        debug_visualize_search_area(page, search_area_bbox, action="save")
+    raw_text = search_strip.extract_text() or ""
+    words_list = search_strip.extract_words()
+    # End debug section
+    
+    # Clean label text for more robust matching (handle newlines or spaces)
+    # We search for the first word or a significant substring to avoid mismatch
+    # e.g., if label is "TRANSACTION DATE", searching for "TRANSACTION" is safer.
+    search_query = label_text.split('\n')[0].split(' ')[0] 
+    # search_query = label_text.strip()
+    matches = search_strip.search(search_query)
+    
+    if matches:
+        if edge == "left":
+            return max(0, matches[0]["x0"] - margin)
+        else:
+            return min(page.width, matches[0]["x1"] + margin)
+            
+    return None
+
+
+def get_table_edges(page, search_area_bbox, vertical=False):
+    """
+    Finds horizontal lines within a vertical area to determine table edges.
+    If vertical=True, returns (left_x, right_x, top_y, bottom_y).
+    Args:
+        page: pdfplumber Page object
+        search_area_bbox: (left, top, right, bottom) tuple defining search area
+        vertical: bool, if True returns full bbox (left, right, top, bottom)
+    Returns:
+        dict or None: {"coords": (left_x, right_x, top_y, bottom_y), "explicit_vertical_lines": [...]} or None if no lines found.
+    """
+    # Debug section: visualize search area
+    if _auto_detect_debug():
+        debug_visualize_search_area(page, search_area_bbox, action="save")
+    # End debug section
+    
+    # all_lines = page.within_bbox(search_area_bbox).lines
+    all_lines = page.crop(search_area_bbox).lines
+    # Filter for horizontal lines that are long enough to be a table separator
+    clean_lines = [l for l in all_lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1]
+    # Group lines by y0 prop to find distinct line segments that belong to the same horizontal divider (y-coordinate)
+    horizontal_lines = []
+    # Loop through clean_lines to group lines and create an ordered list of lists
+    y0_groups = {}
+    for line in clean_lines:
+        y0 = line["y0"]
+        if y0 not in y0_groups:
+            y0_groups[y0] = []
+        y0_groups[y0].append(line)
+    # Save grouped lines as a list of lists
+    horizontal_lines = [lines for lines in y0_groups.values() if len(lines) > 0]
+    # Sort horizontal lines by their y-coordinate (top)
+    horizontal_lines.sort(key=lambda lines: lines[0]["top"])
+    
+    if not horizontal_lines:
+        return None
+    
+    table_edges = {"coords": (), "explicit_vertical_lines": []}
+    
+    # Assume the first horizontal line group defines the table width
+    left_x = horizontal_lines[0][0]["x0"]
+    right_x = horizontal_lines[0][-1]["x1"]
+    table_edges["coords"] = (left_x, right_x)
+    
+    if vertical:
+        # Determine top and bottom y-coordinates
+        top_y = horizontal_lines[0][0]["top"]
+        bottom_y = search_area_bbox[3]
+        if len(horizontal_lines) > 1:
+            bottom_y = horizontal_lines[-1][0]["top"]
+        table_edges["coords"] = (left_x, right_x, top_y, bottom_y)
+    
+    # Find explicit vertical lines in the first horizontal line group
+    if len(horizontal_lines[0]) == 5:
+        first_group = horizontal_lines[0]
+        table_edges["explicit_vertical_lines"] = [line["x1"] for line in first_group]
+        table_edges["explicit_vertical_lines"].insert(0, first_group[0]["x0"])  # Add left edge
+    
+    return table_edges
+
+
+def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
+    profile = load_bank_profile(bank)
     table_settings = profile.get("table_settings", {})
     skip_pages = profile.get('skip_pages_by_index', [])
     sections = profile.get("sections", [])
@@ -167,87 +317,135 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
     with pdfplumber.open(pdf_path) as pdf:
         for page_num, page in enumerate(pdf.pages):
             if page_num in skip_pages:
+                print(f"Skipping page {page_num + 1} (Configured skip)")
                 continue
             
-            page_text = page.extract_text() or ""
+            print(f"Processing page {page_num + 1}")
+
+            # 1. Identify where every section starts on this page (if present)
+            # This map helps us know "What is the next section?"
+            page_section_positions = []
+            for sec in sections:
+                bbox = get_header_bbox(page, sec["match_text"])
+                if bbox:
+                    page_section_positions.append({
+                        "section": sec,
+                        "top": bbox["top"],
+                        "bottom": bbox["bottom"],
+                        "left": bbox["x0"]
+                    })
             
-            for section in sections:
-                match_text = section.get("match_text")
-                if match_text not in page_text:
-                    continue  # Section not on this page
+            # Sort sections by their vertical position (top to bottom)
+            page_section_positions.sort(key=lambda x: x["top"])
+
+            # 2. Iterate through sections found on this page
+            for i, item in enumerate(page_section_positions):
+                section = item["section"]
+                start_y, end_y = item["bottom"], item["bottom"] + 60  # Initial bottom boundary
+                left_x, right_x = item["left"], page.width
                 
-                # Locate match_text bbox to crop around table (avoids sidebar interference)
-                search_results = page.search(match_text, return_groups=False)
-                if not search_results:
+                labels = section.get("header_labels", [])
+                labels = False
+                if labels:
+                    # Determine Search Strip (a small vertical area containing the table headers)
+                    search_strip_bbox = (left_x, start_y, right_x, end_y)
+                    # Dynamic Horizontal Boundaries: Find leftmost and rightmost text in the header row
+                    left_edge = get_label_edge(page, search_strip_bbox, labels[0], edge="left")
+                    right_edge = get_label_edge(page, search_strip_bbox, labels[-1], edge="right")
+                    if left_edge is not None:
+                        left_x = left_edge
+                    if right_edge is not None:
+                        right_x = right_edge
+                
+                # Dynamic Vertical Boundaries: Stop at the NEXT section's top, or Page Bottom
+                if i + 1 < len(page_section_positions):
+                    next_section_top = page_section_positions[i+1]["top"]
+                    end_y = next_section_top
+                else:
+                    end_y = page.height
+                    
+                # Table Boundaries: Adjust left_x and right_x based on horizontal lines
+                search_strip_bbox = (0, start_y, page.width, end_y)
+                table_edges = get_table_edges(page, search_strip_bbox, vertical=True)
+                if table_edges is not None:
+                    left_x = table_edges["coords"][0]
+                    right_x = table_edges["coords"][1]
+                    start_y = table_edges["coords"][2]
+                    end_y = table_edges["coords"][3]
+
+                # Define Crop Box: (left, top, right, bottom)
+                # crop_box = (left_x - 2, start_y, right_x + 2, end_y)
+                crop_box = (left_x, start_y, right_x, end_y)
+                
+                try:
+                    cropped_page = page.crop(crop_box)
+                except ValueError:
+                    print(f"  [Warn] Invalid crop for {section['section_name']}")
                     continue
-                
-                # Get bbox of the first occurrence: pdfplumber search() returns a dict with keys
-                # like 'x0', 'top', 'x1', 'bottom' (not a 'bbox' field).
-                sr = search_results[0]
-                title_bbox = (
-                    sr.get("x0", sr.get("left", 0)),
-                    sr.get("top", sr.get("y0", 0)),
-                    sr.get("x1", sr.get("right", page.width)),
-                    sr.get("bottom", sr.get("y1", page.height))
-                )
-                
-                # Apply offsets for crop (left, top, right, bottom); adjust if needed
-                offset = section.get('crop_bbox_offset', [0, 50, 0, 200])
-                crop_box = (
-                    title_bbox[0] - offset[0],   # left
-                    title_bbox[1] - offset[1],   # top (above title)
-                    page.width - offset[2],      # right (full width minus offset)
-                    title_bbox[3] + offset[3]    # bottom (below title)
-                )
-                cropped_page = page.crop(crop_box)
-                
-                # Find and extract tables from cropped area
+
+                # 3. Extract Tables
+                if table_edges is not None:
+                    if table_settings["vertical_strategy"] == "explicit":
+                        table_settings["explicit_vertical_lines"] = table_edges["explicit_vertical_lines"]
                 tables = cropped_page.find_tables(table_settings=table_settings)
                 
-                for table in tables:
-                    extracted_table = table.extract()
-                    
-                    # Validate: Check if first row matches header_labels (allow partial match for robustness)
-                    if extracted_table and len(extracted_table[0]) >= 4:
-                        # Ensure start_row is always defined (default to 0 if not provided in profile)
-                        start_row = section.get('skip_header_rows', 0)
-                        # Normalize the header cells into a single string for matching (avoid None, handle newlines)
-                        header_text = " ".join([str(c).replace("\n", " ").strip() for c in extracted_table[0] if c is not None]).lower()
-                        if all(hl.lower() in header_text for hl in section.get('header_labels', [])):
-                            # Skip header rows
-                            start_row = section.get('skip_header_rows', 0)
-                        
-                        # Process rows
-                        for row in extracted_table[start_row:]:
-                            # Handle merged cells (e.g., colspan in Purchases subheader)
-                            row = [cell for cell in row if cell]  # Remove None
-                            if len(row) < 4:
-                                continue  # Skip incomplete/subheader rows
-                            
-                            # Skip footer if enabled (e.g., contains "Total")
-                            if section.get('skip_footer_rows', False) and "Total" in ' '.join(row):
-                                continue
-                            
-                            # Map to columns
-                            transaction = {
-                                "transaction_date": row[section['columns']['transaction_date']],
-                                "posting_date": row[section['columns']['posting_date']],
-                                "description": row[section['columns']['description']],
-                                "amount": row[section['columns']['amount']]
-                            }
-                            all_data[section['section_name']].append(transaction)
-                        
-                        print(f"Extracted {len(all_data[section['section_name']])} rows for {section['section_name']}")
-                    
-                    # Debug: Save annotated image (uncomment to visualize)
-                    # im = cropped_page.to_image()
-                    # im.debug_tablefinder(table_settings)
-                    # im.save(f"debug_{section['section_name']}_page{page_num+1}.png")
+                print(f"  Section '{section['section_name']}': Found {len(tables)} tables.")
 
-    # Combine and save all transactions
-    for section_name, txs in all_data.items():
-        transactions.extend(txs)
-    return transactions
+                for table in tables:
+                    raw_data = table.extract()
+                    if not raw_data: continue
+
+                    # 4. Filter & Validate Rows
+                    valid_rows = []
+                    header_found = False
+                    
+                    # Get expected columns from config
+                    expected_cols = len(section['columns'])
+
+                    for row in raw_data:
+                        # Clean row: remove None and empty strings
+                        clean_row = [str(c).strip() for c in row if c and str(c).strip()]
+                        
+                        # A. Header Validation
+                        if not header_found:
+                            # Check if this row looks like the header defined in JSON
+                            # We join to string to be fuzzy-match friendly
+                            row_str = " ".join(clean_row).upper()
+                            required_labels = [l.upper() for l in section.get("header_labels", [])]
+                            
+                            # If most labels match, assume it's the header
+                            matches = sum(1 for label in required_labels if label in row_str)
+                            if matches >= 2: # Loose threshold (2 out of 4)
+                                header_found = True
+                                continue # Skip the header row itself
+                        
+                        # B. Data Extraction
+                        # Must have enough columns and look like a transaction
+                        if len(clean_row) >= expected_cols:
+                            # Basic heuristic: Date often in col 0, Amount in last col
+                            # You can add regex for date checking here for extra safety
+                            
+                            # Handle empty cells if strategy="text" creates gaps
+                            # We map by index defined in JSON
+                            try:
+                                tx = {
+                                    "transaction_date": row[section['columns']['transaction_date']],
+                                    "posting_date": row[section['columns']['posting_date']],
+                                    "description": row[section['columns']['description']],
+                                    "amount": row[section['columns']['amount']]
+                                }
+                                valid_rows.append(tx)
+                            except IndexError:
+                                continue
+
+                    if valid_rows:
+                        all_data[section['section_name']].extend(valid_rows)
+                        print(f"    -> Extracted {len(valid_rows)} valid transactions.")
+
+    # Final Output Summary
+    total_tx = sum(len(x) for x in all_data.values())
+    print(f"\nTotal Transactions Extracted: {total_tx}")
+    return all_data
     
 
 def parse_pdf(pdf_path: pathlib.Path, bank: str):
@@ -257,17 +455,16 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     Args:
         pdf_path (Path): Path to the PDF file.
         bank (str): Bank identifier.
-
     Returns:
         list[dict]: All transactions parsed from the PDF.
     """
+    # Auto-detect debug mode to fine tune pdf parsing:
+    if _auto_detect_debug():
+        notify(f"Debug parsing enabled for {pdf_path.name} — invoking debug_parse_pdf()", "info")
+        return debug_parse_pdf(pdf_path, bank)
+
     transactions = []
     profile = load_bank_profile(bank)
-    
-    # Start debug mode
-    # df = debug_parse_pdf(pdf_path, bank)
-    # print(df)
-    # End debug mode
     
     # Validate profile has sections
     if "sections" not in profile or not isinstance(profile["sections"], list):
@@ -278,8 +475,6 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     table_settings = profile.get("table_settings", {})
     # Pages to skip (0-indexed)
     skip_pages = profile.get('skip_pages_by_index', [])
-    
-    # notify(f"Processing PDF: {pdf_path.name}", "INFO")
 
     try:
         """
@@ -287,14 +482,12 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
         """
         with pdfplumber.open(pdf_path) as pdf:
             
-            # Use a list to track which sections have been found/processed
+            # Track found sections to avoid duplicate parsing
             sections_found_map = {s["section_name"]: False for s in profile["sections"]}
             
             for page_num, page in enumerate(pdf.pages):
                 if page_num in skip_pages:
                     continue
-                
-                # notify(f"Scanning Page {page_num + 1}...", "DEBUG")
                 
                 # 1. Extract all tables on the page
                 tables = page.find_tables(table_settings=table_settings)
@@ -302,7 +495,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                 for table_obj in tables:
                     table_content = table_obj.extract()
                     
-                    # 2. Iterate through all defined sections to find a match
+                    # 2. Iterate through all sections to find a match
                     for section in profile["sections"]:
                         
                         # STEP A: Structural and Semantic Header Validation
@@ -330,8 +523,6 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                                     # Skipping this complex check improves robustness.
                                     # is_target_table = False
                                     pass
-                            
-                            # notify(f"  -> Found '{section['section_name']}' table via Header Validation.", "DEBUG")
                             
                             new_txs = parse_section(table_content, section, profile["bank_name"])
                             transactions.extend(new_txs)
