@@ -17,10 +17,12 @@ from typing import List, Dict, Optional
 from datetime import datetime
 from src.utils import load_bank_profile, notify
 
+
 def _auto_detect_debug() -> bool:
     """Auto-detect debug mode via environment or attached debugger."""
     if os.getenv("VSCODE_DEBUGGING") == "1": return True
     return sys.gettrace() is not None
+
 
 def discover_pdfs(year_dir: str):
     """
@@ -205,16 +207,42 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
     return saved_path
 
 
-def get_header_bbox(page, match_text, crop_bbox = None):
-    """Finds the bounding box of the specific match text."""
+def get_page_left_margin(page, top_fraction: float = 1.0):
+    """Find the leftmost x0 coordinate of text in the top portion of the page.
+
+    top_fraction: fraction (0.0–1.0) of page height to include from the top.
+    """
+    top_fraction = max(0.0, min(1.0, top_fraction))
+    top_crop = page.crop((0, 0, page.width, page.height * top_fraction))
+    words_in_top = top_crop.extract_words()
+
+    try:
+        page_left_margin = min(w.get("x0", 0) for w in words_in_top)
+    except ValueError:
+        page_left_margin = 0
+        
+    return page_left_margin
+
+
+def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Optional[float] = None, tolerance: float = 0.5):
+    """Finds the bounding box of a section header by searching for match_text."""
     results = (page.crop(crop_bbox) if crop_bbox else page).search(match_text)
+    
+    if not results:
+        return None
+    
+    if left_margin is not None:
+        # Filter for matches that are left-aligned within tolerance
+        results = [r for r in results if abs(r["x0"] - left_margin) <= tolerance]
+    
     if results:
-        # Return the first match's dict (x0, top, x1, bottom)
-        return results[0] 
+        # Return the top_most match's dict (x0, top, x1, bottom)
+        return min(results, key=lambda r: r["top"])
+    
     return None
 
 
-def get_label_edge(page, search_area_bbox, label_text, edge="left", margin=0):
+def get_table_header_edge(page, search_area_bbox, label_text, edge="left", margin=0):
     """
     Finds a specific header label within a vertical area and returns its edge.
     edge: "left" (returns x0 - margin) or "right" (returns x1 + margin)
@@ -301,7 +329,7 @@ def get_table_edges(page, search_area_bbox, vertical=False):
     if len(horizontal_lines[0]) == 5:
         first_group = horizontal_lines[0]
         table_edges["explicit_vertical_lines"] = [line["x1"] for line in first_group]
-        table_edges["explicit_vertical_lines"].insert(0, first_group[0]["x0"])  # Add left edge
+        table_edges["explicit_vertical_lines"][0] = first_group[0]["x0"]  # Replace first edge with left edge
     
     return table_edges
 
@@ -321,12 +349,15 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                 continue
             
             print(f"Processing page {page_num + 1}")
+            
+            # --- Prepare: Get page left margin for alignment checks ---
+            left_margin = get_page_left_margin(page, top_fraction=0.25)
 
             # 1. Identify where every section starts on this page (if present)
             # This map helps us know "What is the next section?"
             page_section_positions = []
             for sec in sections:
-                bbox = get_header_bbox(page, sec["match_text"])
+                bbox = get_section_header_bbox(page, sec["match_text"], left_margin=left_margin)
                 if bbox:
                     page_section_positions.append({
                         "section": sec,
@@ -350,8 +381,8 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                     # Determine Search Strip (a small vertical area containing the table headers)
                     search_strip_bbox = (left_x, start_y, right_x, end_y)
                     # Dynamic Horizontal Boundaries: Find leftmost and rightmost text in the header row
-                    left_edge = get_label_edge(page, search_strip_bbox, labels[0], edge="left")
-                    right_edge = get_label_edge(page, search_strip_bbox, labels[-1], edge="right")
+                    left_edge = get_table_header_edge(page, search_strip_bbox, labels[0], edge="left")
+                    right_edge = get_table_header_edge(page, search_strip_bbox, labels[-1], edge="right")
                     if left_edge is not None:
                         left_x = left_edge
                     if right_edge is not None:
