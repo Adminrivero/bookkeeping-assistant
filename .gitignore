@@ -1,6 +1,7 @@
 # Ignore common Python build/environment files
 cs50p_venv/
 .vscode/
+.pydebug/
 venv/
 
 # Ignore Python bytecode files

@@ -1,12 +1,17 @@
 {
   "bank_name": "Triangle MasterCard",
+  "skip_pages_by_index": [0],
   "table_settings": {
-    "vertical_strategy": "text",
-    "horizontal_strategy": "lines",
+    "vertical_strategy": "explicit",
+    "explicit_vertical_lines": [],
+    "horizontal_strategy": "text",
+    "text_x_tolerance": 25,
+    "text_y_tolerance": 4,
+    "min_words_vertical": 1,
+    "min_words_horizontal": 1,
+    "intersection_tolerance": 15,
     "snap_tolerance": 5,
-    "v_tolerance": 5,
-    "min_words_vertically": 1,
-    "min_words_horizontally": 1
+    "join_tolerance": 5
   },
   "sections": [
     {
@@ -18,12 +23,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "skip_footer_rows": true
     },
     {
@@ -35,12 +35,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "skip_footer_rows": true
     },
     {
@@ -52,12 +47,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "skip_footer_rows": true
     },
     {
@@ -69,12 +59,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": [
-        "TRANSACTION DATE", 
-        "POSTING DATE", 
-        "TRANSACTION DESCRIPTION", 
-        "AMOUNT ($)"
-      ],
+      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "skip_footer_rows": true
     }
   ]
