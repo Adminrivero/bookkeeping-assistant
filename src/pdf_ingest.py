@@ -168,11 +168,13 @@ def validate_table_structure(table_rows: List[List[str | None]], section_config:
 def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename: Optional[str] = None):
     """
     Visualize a cropped area of a PDF page by drawing a red rectangle.
+    
     Args:
         page: pdfplumber Page object.
         crop_bbox: (x0, top, x1, bottom) tuple defining the crop area.
         action: "save", "show", or "both". Defaults to "save".
         filename: Optional filename when action includes "save".
+        
     Returns:
         str|None: Path to saved file if saved, otherwise None.
     """
@@ -210,7 +212,12 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
 def get_page_left_margin(page, top_fraction: float = 1.0):
     """Find the leftmost x0 coordinate of text in the top portion of the page.
 
-    top_fraction: fraction (0.0–1.0) of page height to include from the top.
+    Args:
+        page: pdfplumber Page object
+        top_fraction: float between 0.0 and 1.0 indicating portion of page height to consider.
+        
+    Returns:
+        float: The leftmost x0 coordinate of text in the specified top portion of the page.
     """
     top_fraction = max(0.0, min(1.0, top_fraction))
     top_crop = page.crop((0, 0, page.width, page.height * top_fraction))
@@ -225,7 +232,19 @@ def get_page_left_margin(page, top_fraction: float = 1.0):
 
 
 def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Optional[float] = None, tolerance: float = 0.5):
-    """Finds the bounding box of a section header by searching for match_text."""
+    """
+    Finds the bounding box of a section header by searching for match_text.
+    
+    Args:
+        page: pdfplumber Page object
+        match_text: text to search for
+        crop_bbox: optional (x0, top, x1, bottom) tuple to limit search area
+        left_margin: optional float to filter matches by left alignment
+        tolerance: float tolerance for left alignment filtering
+        
+    Returns:
+        dict|None: Bounding box dict or None if not found
+    """
     results = (page.crop(crop_bbox) if crop_bbox else page).search(match_text)
     
     if not results:
@@ -238,6 +257,52 @@ def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Opt
     if results:
         # Return the top_most match's dict (x0, top, x1, bottom)
         return min(results, key=lambda r: r["top"])
+    
+    return None
+
+
+def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=None):
+    """
+    Finds the bounding box of a section footer by searching for footer_text
+    within a defined search area and validates it using a three-gate check 
+    (1-Vertical Slice Gate, 2-Line Proximity Gate, 3-Horizontal Overlap Gate).
+
+    Args:
+        page: pdfplumber Page object
+        footer_text: text to search for
+        search_area_bbox: (left, top, right, bottom) tuple defining search area
+        header_x_range: (x0, x1) of the section header for horizontal validation
+        
+    Returns:
+        dict|None: Bounding box dict or None if not found
+    """
+    search_strip = page.crop(search_area_bbox)
+    matches = search_strip.search(footer_text)
+    
+    if not matches:
+        return None
+    
+    # Get all horizontal lines in the search area once to avoid repeated calls
+    horizontal_lines = [l for l in search_strip.lines if abs(l["y0"] - l["y1"]) == 0]
+    
+    valid_matches = []
+    for m in matches:
+        # Check Gate 2: Line Proximity (Search for a line just above the text in aprox 5-15 pixels range)
+        line_above = any(l for l in horizontal_lines if (m["top"] - 15) <= l["y0"] <= (m["top"] - 5) and l["x0"] <= m["x1"] and l["x1"] >= m["x0"])
+        
+        # Check Gate 3: Horizontal Overlap (if header bounds are provided)
+        overlaps_header = True
+        if header_x_range:
+            # Check if the footer text is roughly within the same horizontal corridor
+            header_x0, header_x1 = header_x_range
+            overlaps_header = not (m["x1"] < header_x0 or m["x0"] > header_x1)
+
+        if line_above and overlaps_header:
+            valid_matches.append(m)
+
+    if valid_matches:
+        # Return the top_most valid match's dict (x0, top, x1, bottom)
+        return min(valid_matches, key=lambda r: r["top"])
     
     return None
 
@@ -277,10 +342,12 @@ def get_table_edges(page, search_area_bbox, vertical=False):
     """
     Finds horizontal lines within a vertical area to determine table edges.
     If vertical=True, returns (left_x, right_x, top_y, bottom_y).
+    
     Args:
         page: pdfplumber Page object
         search_area_bbox: (left, top, right, bottom) tuple defining search area
         vertical: bool, if True returns full bbox (left, right, top, bottom)
+        
     Returns:
         dict or None: {"coords": (left_x, right_x, top_y, bottom_y), "explicit_vertical_lines": [...]} or None if no lines found.
     """
