@@ -10,6 +10,7 @@
         "description": 2,
         "amount": 3
       },
+      "footer_row_text": "Total payments",
       "skip_footer_rows": true
     },
     {
@@ -22,6 +23,7 @@
         "annual_interest_rate": 3,
         "amount": 4
       },
+      "footer_row_text": "Total interest this period",
       "skip_footer_rows": true
     },
     {
@@ -34,6 +36,7 @@
         "spend_category": 3,
         "amount": 4
       },
+      "footer_row_text": "Total for 5268",
       "skip_footer_rows": true
     }
   ]
