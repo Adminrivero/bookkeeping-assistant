@@ -16,6 +16,7 @@ import webbrowser, pathlib
 from typing import List, Dict, Optional
 from datetime import datetime
 from src.utils import load_bank_profile, notify
+from collections import defaultdict
 
 
 def _auto_detect_debug() -> bool:
@@ -264,8 +265,8 @@ def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Opt
 def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=None):
     """
     Finds the bounding box of a section footer by searching for footer_text
-    within a defined search area and validates it using a three-gate check 
-    (1-Vertical Slice Gate, 2-Line Proximity Gate, 3-Horizontal Overlap Gate).
+    within a defined search area and validating its position relative to the header.
+    Implements a three-gate validation process (1-Vertical Slice Gate, 2-Line Proximity Gate, 3-Horizontal Overlap Gate).
 
     Args:
         page: pdfplumber Page object
@@ -283,22 +284,54 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
         return None
     
     # Get all horizontal lines in the search area once to avoid repeated calls
-    horizontal_lines = [l for l in search_strip.lines if abs(l["y0"] - l["y1"]) == 0]
+    all_lines = [l for l in search_strip.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1]
+    
+    # Group line segments by y0 coord to find distinct lines that belong to the same horizontal divider (y-coordinate)
+    y0_groups = defaultdict(list)
+    for line in all_lines:
+        y0_groups[line["y0"]].append(line)
+        
+    # Create a sorted list of horizontal line segments (grouped by their y0 coordinate)
+    horizontal_lines = [group for _, group in sorted(y0_groups.items(), key=lambda kv: kv[0])]
+    # h_lines_top_coord = [grp[0]["top"] for grp in horizontal_lines]
     
     valid_matches = []
-    for m in matches:
-        # Check Gate 2: Line Proximity (Search for a line just above the text in aprox 5-15 pixels range)
-        line_above = any(l for l in horizontal_lines if (m["top"] - 15) <= l["y0"] <= (m["top"] - 5) and l["x0"] <= m["x1"] and l["x1"] >= m["x0"])
+    for match in matches:
+        text_top = match["top"]
+        text_bottom = match["bottom"]
+        
+        # Check Gate 2: Line Proximity and Horizontal Coverage
+        line_above = False
+        for l in horizontal_lines:
+            line_top= l[0]["top"]
+            line_x0 = l[0]["x0"]
+            line_x1 = l[-1]["x1"]
+            
+            # 1. Vertical Proximity Gate
+            # Allow the line to be up to 15 points above the text and up to 2 points 'inside' the text box
+            is_vertically_aligned = (text_top - 15) <= line_top <= (text_top + 2)
+            
+            # Ensure the line is physically above the text midline (restrict it to a 15-points range)
+            # text_midline = (text_top + text_bottom) / 2
+            # is_vertically_aligned = (text_midline - 15) <= line_top < text_midline
+            
+            # 2. Horizontal Coverage Gate
+            # Check if the line starts before and ends after the text box horizontally
+            is_horizontally_covering = (line_x0 <= match["x0"]) and (line_x1 >= match["x1"])
+            
+            if is_vertically_aligned and is_horizontally_covering:
+                line_above = True
+                break
         
         # Check Gate 3: Horizontal Overlap (if header bounds are provided)
         overlaps_header = True
         if header_x_range:
             # Check if the footer text is roughly within the same horizontal corridor
             header_x0, header_x1 = header_x_range
-            overlaps_header = not (m["x1"] < header_x0 or m["x0"] > header_x1)
+            overlaps_header = (match["x0"] > header_x0 and (match["x1"] <= header_x1 or match["x1"] <= (page.width * 0.5)))
 
         if line_above and overlaps_header:
-            valid_matches.append(m)
+            valid_matches.append(match)
 
     if valid_matches:
         # Return the top_most valid match's dict (x0, top, x1, bottom)
@@ -430,7 +463,8 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                         "section": sec,
                         "top": bbox["top"],
                         "bottom": bbox["bottom"],
-                        "left": bbox["x0"]
+                        "left": bbox["x0"],
+                        "right": bbox["x1"]
                     })
             
             # Sort sections by their vertical position (top to bottom)
@@ -439,15 +473,18 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
             # 2. Iterate through sections found on this page
             for i, item in enumerate(page_section_positions):
                 section = item["section"]
-                start_y, end_y = item["bottom"], item["bottom"] + 60  # Initial bottom boundary
+                start_y = item["bottom"]
                 left_x, right_x = item["left"], page.width
+                header_x_range = (left_x, item["right"])
                 
                 labels = section.get("header_labels", [])
                 labels = False
                 if labels:
+                    # Refine Horizontal Boundaries using header labels
+                    end_y = item["bottom"] + 60 # Approx height of header area
                     # Determine Search Strip (a small vertical area containing the table headers)
                     search_strip_bbox = (left_x, start_y, right_x, end_y)
-                    # Dynamic Horizontal Boundaries: Find leftmost and rightmost text in the header row
+                    # Horizontal Boundaries: Find leftmost and rightmost text in the header row
                     left_edge = get_table_header_edge(page, search_strip_bbox, labels[0], edge="left")
                     right_edge = get_table_header_edge(page, search_strip_bbox, labels[-1], edge="right")
                     if left_edge is not None:
@@ -455,14 +492,21 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                     if right_edge is not None:
                         right_x = right_edge
                 
-                # Dynamic Vertical Boundaries: Stop at the NEXT section's top, or Page Bottom
-                if i + 1 < len(page_section_positions):
-                    next_section_top = page_section_positions[i+1]["top"]
-                    end_y = next_section_top
-                else:
-                    end_y = page.height
+                # Vertical Boundaries: Define the search ceiling (start_y) and floor (end_y) for the table
+                max_y = page_section_positions[i+1]["top"] if i + 1 < len(page_section_positions) else page.height
+                end_y = max_y # Default to next section top or page bottom
+                
+                # Check for footer row to refine end_y
+                footer_marker = section.get("footer_row_text")
+                
+                if footer_marker:
+                    # Define search area for footer: from start_y to max_y
+                    search_area_bbox = (left_x, start_y, right_x, max_y)
+                    footer_bbox = get_section_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
+                    if footer_bbox:
+                        end_y = footer_bbox["top"]
                     
-                # Table Boundaries: Adjust left_x and right_x based on horizontal lines
+                # Table Boundaries: Adjust horizontal and vertical boundaries based on table horizontal lines
                 search_strip_bbox = (0, start_y, page.width, end_y)
                 table_edges = get_table_edges(page, search_strip_bbox, vertical=True)
                 if table_edges is not None:
@@ -559,7 +603,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     # Auto-detect debug mode to fine tune pdf parsing:
     if _auto_detect_debug():
         notify(f"Debug parsing enabled for {pdf_path.name} — invoking debug_parse_pdf()", "info")
-        return debug_parse_pdf(pdf_path, bank)
+        all_transactions = debug_parse_pdf(pdf_path, bank)
 
     transactions = []
     profile = load_bank_profile(bank)
