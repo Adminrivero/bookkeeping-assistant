@@ -4,8 +4,6 @@ PDF Ingestion Module for Credit Card Statements
 This module discovers, normalizes, parses, and exports transactions
 from credit card statement PDFs (e.g., Triangle MasterCard).
 """
-import os
-import sys
 import csv
 import re
 import pathlib
@@ -15,14 +13,8 @@ import tempfile
 import webbrowser, pathlib
 from typing import List, Dict, Optional
 from datetime import datetime
-from src.utils import load_bank_profile, notify
+from src.utils import load_bank_profile, notify, debug_mode, time_it
 from collections import defaultdict
-
-
-def _auto_detect_debug() -> bool:
-    """Auto-detect debug mode via environment or attached debugger."""
-    if os.getenv("VSCODE_DEBUGGING") == "1": return True
-    return sys.gettrace() is not None
 
 
 def discover_pdfs(year_dir: str):
@@ -209,7 +201,7 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
 
     return saved_path
 
-
+@time_it
 def get_page_left_margin(page, top_fraction: float = 1.0):
     """Find the leftmost x0 coordinate of text in the top portion of the page.
 
@@ -349,7 +341,7 @@ def get_table_header_edge(page, search_area_bbox, label_text, edge="left", margi
     search_strip = page.crop(search_area_bbox)
     
     # Debug section: visualize search area
-    if _auto_detect_debug():
+    if debug_mode:
         debug_visualize_search_area(page, search_area_bbox, action="save")
     raw_text = search_strip.extract_text() or ""
     words_list = search_strip.extract_words()
@@ -385,7 +377,7 @@ def get_table_edges(page, search_area_bbox, vertical=False):
         dict or None: {"coords": (left_x, right_x, top_y, bottom_y), "explicit_vertical_lines": [...]} or None if no lines found.
     """
     # Debug section: visualize search area
-    if _auto_detect_debug():
+    if debug_mode:
         debug_visualize_search_area(page, search_area_bbox, action="save")
     # End debug section
     
@@ -451,10 +443,10 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
             print(f"Processing page {page_num + 1}")
             
             # --- Prepare: Get page left margin for alignment checks ---
+            # Todo: Use a smaller horizontal area (left_fraction=0.5) to speed up processing
             left_margin = get_page_left_margin(page, top_fraction=0.25)
 
             # 1. Identify where every section starts on this page (if present)
-            # This map helps us know "What is the next section?"
             page_section_positions = []
             for sec in sections:
                 bbox = get_section_header_bbox(page, sec["match_text"], left_margin=left_margin)
@@ -601,7 +593,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
         list[dict]: All transactions parsed from the PDF.
     """
     # Auto-detect debug mode to fine tune pdf parsing:
-    if _auto_detect_debug():
+    if debug_mode:
         notify(f"Debug parsing enabled for {pdf_path.name} — invoking debug_parse_pdf()", "info")
         all_transactions = debug_parse_pdf(pdf_path, bank)
 
