@@ -202,22 +202,29 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
     return saved_path
 
 @time_it
-def get_page_left_margin(page, top_fraction: float = 1.0):
+def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
     """Find the leftmost x0 coordinate of text in the top portion of the page.
 
     Args:
         page: pdfplumber Page object
         top_fraction: float between 0.0 and 1.0 indicating portion of page height to consider.
+        left_fraction: float between 0.0 and 1.0 indicating portion of page width to consider.
         
     Returns:
         float: The leftmost x0 coordinate of text in the specified top portion of the page.
     """
-    top_fraction = max(0.0, min(1.0, top_fraction))
-    top_crop = page.crop((0, 0, page.width, page.height * top_fraction))
-    words_in_top = top_crop.extract_words()
+    search_area = (0, 0, page.width * left_fraction, page.height * top_fraction)
+    
+    # Debug section: visualize search area
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area, action="save")
+    # End debug section
+    
+    crop_area = page.crop(search_area)
+    words_found = crop_area.extract_words()
 
     try:
-        page_left_margin = min(w.get("x0", 0) for w in words_in_top)
+        page_left_margin = min(w.get("x0", 0) for w in words_found)
     except ValueError:
         page_left_margin = 0
         
@@ -341,10 +348,10 @@ def get_table_header_edge(page, search_area_bbox, label_text, edge="left", margi
     search_strip = page.crop(search_area_bbox)
     
     # Debug section: visualize search area
-    if debug_mode:
-        debug_visualize_search_area(page, search_area_bbox, action="save")
-    raw_text = search_strip.extract_text() or ""
-    words_list = search_strip.extract_words()
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save")
+    # raw_text = search_strip.extract_text() or ""
+    # words_list = search_strip.extract_words()
     # End debug section
     
     # Clean label text for more robust matching (handle newlines or spaces)
@@ -377,8 +384,8 @@ def get_table_edges(page, search_area_bbox, vertical=False):
         dict or None: {"coords": (left_x, right_x, top_y, bottom_y), "explicit_vertical_lines": [...]} or None if no lines found.
     """
     # Debug section: visualize search area
-    if debug_mode:
-        debug_visualize_search_area(page, search_area_bbox, action="save")
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save")
     # End debug section
     
     # all_lines = page.within_bbox(search_area_bbox).lines
@@ -443,8 +450,7 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
             print(f"Processing page {page_num + 1}")
             
             # --- Prepare: Get page left margin for alignment checks ---
-            # Todo: Use a smaller horizontal area (left_fraction=0.5) to speed up processing
-            left_margin = get_page_left_margin(page, top_fraction=0.25)
+            left_margin = get_page_left_margin(page, top_fraction=0.20, left_fraction=0.30)
 
             # 1. Identify where every section starts on this page (if present)
             page_section_positions = []
