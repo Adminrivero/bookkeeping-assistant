@@ -4,8 +4,6 @@ PDF Ingestion Module for Credit Card Statements
 This module discovers, normalizes, parses, and exports transactions
 from credit card statement PDFs (e.g., Triangle MasterCard).
 """
-import os
-import sys
 import csv
 import re
 import pathlib
@@ -15,14 +13,8 @@ import tempfile
 import webbrowser, pathlib
 from typing import List, Dict, Optional
 from datetime import datetime
-from src.utils import load_bank_profile, notify
+from src.utils import load_bank_profile, notify, debug_mode, time_it
 from collections import defaultdict
-
-
-def _auto_detect_debug() -> bool:
-    """Auto-detect debug mode via environment or attached debugger."""
-    if os.getenv("VSCODE_DEBUGGING") == "1": return True
-    return sys.gettrace() is not None
 
 
 def discover_pdfs(year_dir: str):
@@ -210,22 +202,30 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
     return saved_path
 
 
-def get_page_left_margin(page, top_fraction: float = 1.0):
+# @time_it
+def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
     """Find the leftmost x0 coordinate of text in the top portion of the page.
 
     Args:
         page: pdfplumber Page object
         top_fraction: float between 0.0 and 1.0 indicating portion of page height to consider.
+        left_fraction: float between 0.0 and 1.0 indicating portion of page width to consider.
         
     Returns:
         float: The leftmost x0 coordinate of text in the specified top portion of the page.
     """
-    top_fraction = max(0.0, min(1.0, top_fraction))
-    top_crop = page.crop((0, 0, page.width, page.height * top_fraction))
-    words_in_top = top_crop.extract_words()
+    search_area = (0, 0, page.width * left_fraction, page.height * top_fraction)
+    
+    # Debug section: visualize search area
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area, action="save")
+    # End debug section
+    
+    crop_area = page.crop(search_area)
+    words_found = crop_area.extract_words()
 
     try:
-        page_left_margin = min(w.get("x0", 0) for w in words_in_top)
+        page_left_margin = min(w.get("x0", 0) for w in words_found)
     except ValueError:
         page_left_margin = 0
         
@@ -349,10 +349,10 @@ def get_table_header_edge(page, search_area_bbox, label_text, edge="left", margi
     search_strip = page.crop(search_area_bbox)
     
     # Debug section: visualize search area
-    if _auto_detect_debug():
-        debug_visualize_search_area(page, search_area_bbox, action="save")
-    raw_text = search_strip.extract_text() or ""
-    words_list = search_strip.extract_words()
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save")
+    # raw_text = search_strip.extract_text() or ""
+    # words_list = search_strip.extract_words()
     # End debug section
     
     # Clean label text for more robust matching (handle newlines or spaces)
@@ -385,8 +385,8 @@ def get_table_edges(page, search_area_bbox, vertical=False):
         dict or None: {"coords": (left_x, right_x, top_y, bottom_y), "explicit_vertical_lines": [...]} or None if no lines found.
     """
     # Debug section: visualize search area
-    if _auto_detect_debug():
-        debug_visualize_search_area(page, search_area_bbox, action="save")
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save")
     # End debug section
     
     # all_lines = page.within_bbox(search_area_bbox).lines
@@ -434,6 +434,7 @@ def get_table_edges(page, search_area_bbox, vertical=False):
     return table_edges
 
 
+# @time_it
 def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
     profile = load_bank_profile(bank)
     table_settings = profile.get("table_settings", {})
@@ -451,10 +452,9 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
             print(f"Processing page {page_num + 1}")
             
             # --- Prepare: Get page left margin for alignment checks ---
-            left_margin = get_page_left_margin(page, top_fraction=0.25)
+            left_margin = get_page_left_margin(page, top_fraction=0.20, left_fraction=0.30)
 
             # 1. Identify where every section starts on this page (if present)
-            # This map helps us know "What is the next section?"
             page_section_positions = []
             for sec in sections:
                 bbox = get_section_header_bbox(page, sec["match_text"], left_margin=left_margin)
@@ -584,7 +584,7 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                         all_data[section['section_name']].extend(valid_rows)
                         print(f"    -> Extracted {len(valid_rows)} valid transactions.")
 
-    # Final Output Summary
+    # Final Summary
     total_tx = sum(len(x) for x in all_data.values())
     print(f"\nTotal Transactions Extracted: {total_tx}")
     return all_data
@@ -600,81 +600,180 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     Returns:
         list[dict]: All transactions parsed from the PDF.
     """
-    # Auto-detect debug mode to fine tune pdf parsing:
-    if _auto_detect_debug():
+    # If debug_mode — invoke debug parser to finetune extraction:
+    if debug_mode:
         notify(f"Debug parsing enabled for {pdf_path.name} — invoking debug_parse_pdf()", "info")
         all_transactions = debug_parse_pdf(pdf_path, bank)
+        # In debug mode, don't do production parsing (avoid double work / inconsistent results)
+        return [tx for section_rows in all_transactions.values() for tx in section_rows]
+    # End debug section
 
     transactions = []
     profile = load_bank_profile(bank)
-    
-    # Validate profile has sections
-    if "sections" not in profile or not isinstance(profile["sections"], list):
-        notify(f"Bank profile for {bank} is missing 'sections' key or is malformed.", "error")
+
+    # ---- Validate profile structure (fail fast) ----
+    sections = profile.get("sections")
+    if not isinstance(sections, list) or not sections:
+        notify(f"Bank profile for {bank} is missing 'sections' or it is malformed/empty.", "error")
         return transactions
-    
-    # Extract table settings from profile, falling back to an empty dict
-    table_settings = profile.get("table_settings", {})
-    # Pages to skip (0-indexed)
-    skip_pages = profile.get('skip_pages_by_index', [])
+
+    for s in sections:
+        if not isinstance(s, dict) or "section_name" not in s or "match_text" not in s or "columns" not in s:
+            notify(f"Bank profile for {bank} has malformed section entries (needs section_name/match_text/columns).", "error")
+            return transactions
+        if not isinstance(s.get("columns"), dict) or not s["columns"]:
+            notify(f"Bank profile for {bank} section '{s.get('section_name')}' has missing/malformed columns.", "error")
+            return transactions
+
+    table_settings = profile.get("table_settings", {}) or {}
+    skip_indices = set(profile.get("skip_pages_by_index", []) or [])
+    header_anchor = profile.get("page_header_anchor", None)
+
+    source_name = profile.get("bank_name", bank)
+
+    # Track sections found on this statement (kept for potential future validation)
+    sections_map = {section["section_name"]: [] for section in sections}
 
     try:
-        """
-        Robust PDF parsing: Extracts all tables and uses header validation to identify targets.
-        """
         with pdfplumber.open(pdf_path) as pdf:
-            
-            # Track found sections to avoid duplicate parsing
-            sections_found_map = {s["section_name"]: False for s in profile["sections"]}
-            
             for page_num, page in enumerate(pdf.pages):
-                if page_num in skip_pages:
+                # Skip pages as per profile config
+                if page_num in skip_indices:
                     continue
-                
-                # 1. Extract all tables on the page
-                tables = page.find_tables(table_settings=table_settings)
-                
-                for table_obj in tables:
-                    table_content = table_obj.extract()
-                    
-                    # 2. Iterate through all sections to find a match
-                    for section in profile["sections"]:
-                        
-                        # STEP A: Structural and Semantic Header Validation
-                        if validate_table_structure(table_content, section):
-                            
-                            is_target_table = True
-                            match_text = section.get("match_text")
-                            
-                            # STEP B: Optional Context Validation (The match_text check)
-                            # This is now a TIE-BREAKER, not a boundary setter.
-                            # It's less reliable due to false positives, but can help confirm.
-                            if match_text:
-                                # Look for the match_text nearby (e.g., 100 units above the table's top y-coord)
-                                SEARCH_HEIGHT = 100
-                                table_bbox = table_obj.bbox  # (x0, y0, x1, y1)
-                                table_top_y = table_bbox[1]
-                                # Calculate the TOP of the search area, ensuring it's not negative.
-                                search_top_y = max(0, table_top_y - SEARCH_HEIGHT)
-                                # Define the search area: (page_left, safe_search_top, page_right, table_top)
-                                search_area = (0, search_top_y, page.width, table_top_y)
-                                nearby_text = page.within_bbox(search_area).extract_text() or ""
-                                if match_text.lower() not in nearby_text.lower():
-                                    # If the section header isn't found nearby, this might be a table spillover
-                                    # This check is tricky. It's safer to trust the header validation alone.
-                                    # Skipping this complex check improves robustness.
-                                    # is_target_table = False
-                                    pass
-                            
-                            new_txs = parse_section(table_content, section, profile["bank_name"])
-                            transactions.extend(new_txs)
-                            
-                            # Mark the section as found to avoid double-counting if a similar table exists.
-                            sections_found_map[section['section_name']] = True
-                            
-                            # Break inner loop and move to the next table_obj
-                            break
-                        
+
+                # 1) Get page left margin for alignment checks
+                # --- Prepare: Get page left margin for alignment checks ---
+                left_margin = float(get_page_left_margin(page, top_fraction=0.20, left_fraction=0.30) or 0.0)
+
+                # 2) Identify all section headers on this page
+                page_section_positions = []
+                for sec in sections:
+                    bbox = get_section_header_bbox(page, sec["match_text"], left_margin=left_margin)
+                    if not bbox:
+                        continue
+                    page_section_positions.append(
+                        {
+                            "section": sec,
+                            "top": bbox["top"],
+                            "bottom": bbox["bottom"],
+                            "left": bbox["x0"],
+                            "right": bbox["x1"],
+                        }
+                    )
+                    sections_map[sec["section_name"]].append(page_num)
+
+                if not page_section_positions:
+                    continue
+
+                page_section_positions.sort(key=lambda x: x["top"])
+
+                # 3) For each found section, compute bounds, crop, extract, validate, parse
+                for i, item in enumerate(page_section_positions):
+                    section = item["section"]
+
+                    # --- Vertical bounds (start after header, end at next section or page bottom) ---
+                    start_y = float(item["bottom"])
+                    max_y = (
+                        float(page_section_positions[i + 1]["top"])
+                        if (i + 1) < len(page_section_positions)
+                        else float(page.height)
+                    )
+                    end_y = max_y
+
+                    # --- Optional footer tightening ---
+                    footer_marker = section.get("footer_row_text")
+                    if footer_marker:
+                        search_area_bbox = (0.0, start_y, float(page.width), max_y)
+                        header_x_range = (float(item["left"]), float(item["right"]))
+                        footer_bbox = get_section_footer_bbox(
+                            page, footer_marker, search_area_bbox, header_x_range=header_x_range
+                        )
+                        if footer_bbox and float(footer_bbox["top"]) > start_y:
+                            end_y = float(footer_bbox["top"])
+
+                    # Guard: invalid vertical window
+                    if end_y <= start_y + 2:
+                        continue
+
+                    # --- Table edges: refine crop box using horizontal rules (fast + stable) ---
+                    strip_bbox = (0.0, start_y, float(page.width), end_y)
+                    table_edges = get_table_edges(page, strip_bbox, vertical=True)
+                    if table_edges and "coords" in table_edges and len(table_edges["coords"]) == 4:
+                        left_x, right_x, top_y, bottom_y = table_edges["coords"]
+                        # Keep within page bounds
+                        left_x = max(0.0, float(left_x))
+                        right_x = min(float(page.width), float(right_x))
+                        top_y = max(0.0, float(top_y))
+                        bottom_y = min(float(page.height), float(bottom_y))
+                    else:
+                        # Fallback: reasonable corridor from left margin to page width
+                        left_x, right_x, top_y, bottom_y = (
+                            max(0.0, float(item["left"]) - 1.0),
+                            float(page.width),
+                            start_y,
+                            end_y,
+                        )
+
+                    # Guard: invalid crop
+                    if right_x <= left_x + 2 or bottom_y <= top_y + 2:
+                        continue
+
+                    crop_box = (left_x, top_y, right_x, bottom_y)
+                    try:
+                        cropped_page = page.crop(crop_box)
+                    except Exception:
+                        # Keep quiet unless true error is needed; this is recoverable
+                        continue
+
+                    # --- Extraction settings: inject explicit verticals when available/configured ---
+                    effective_table_settings = dict(table_settings)
+                    if (
+                        table_edges
+                        and effective_table_settings.get("vertical_strategy") == "explicit"
+                        and table_edges.get("explicit_vertical_lines")
+                    ):
+                        effective_table_settings["explicit_vertical_lines"] = table_edges["explicit_vertical_lines"]
+
+                    # Prefer single-table extraction for performance; fallback to find_tables when needed
+                    table_rows = None
+                    try:
+                        table_rows = cropped_page.extract_table(table_settings=effective_table_settings)
+                    except Exception:
+                        table_rows = None
+
+                    if not table_rows:
+                        try:
+                            tables = cropped_page.find_tables(table_settings=effective_table_settings) or []
+                            if tables:
+                                # Choose the biggest extracted table (most rows) as best candidate
+                                extracted = [t.extract() for t in tables]
+                                extracted = [t for t in extracted if t]
+                                if extracted:
+                                    table_rows = max(extracted, key=lambda t: len(t))
+                        except Exception:
+                            table_rows = None
+
+                    if not table_rows:
+                        continue
+
+                    # --- Validate target table structure/headers before parsing ---
+                    if not validate_table_structure(table_rows, section):
+                        continue
+
+                    # --- Parse & normalize ---
+                    try:
+                        new_txs = parse_section(table_rows, section, source_name)
+                    except Exception as e:
+                        notify(
+                            "Failed parsing section %s in %s (page %d): %s"
+                            % (section.get("section_name"), pdf_path.name, page_num + 1, e),
+                            "error",
+                        )
+                        continue
+
+                    if new_txs:
+                        transactions.extend(new_txs)
+
     except Exception as e:
         notify("Failed to parse PDF %s: %s" % (pdf_path, e), "error")
 

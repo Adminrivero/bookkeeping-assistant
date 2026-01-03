@@ -1,11 +1,24 @@
+import os
 import sys
 import json
+import time
 import logging
 import jsonschema
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Callable
+from functools import wraps
 
-use_logging = False  # global flag, toggled by CLI
+def _auto_detect_debug() -> bool:
+    """Auto-detect debug mode via environment or attached debugger."""
+    if os.getenv("VSCODE_DEBUGGING") == "1":
+        return True
+    return sys.gettrace() is not None
+
+# Global flags
+use_logging = False  # toggled by CLI
+debug_mode = _auto_detect_debug()
+perf_monitoring = True  # toggled as needed
+
 
 def notify(message: str, level: str = "info"):
     """
@@ -29,6 +42,27 @@ def notify(message: str, level: str = "info"):
             except Exception:
                 # Last-resort fallback: print ASCII with replacement to avoid raising
                 print(message.encode("ascii", errors="replace").decode("ascii"))
+
+
+def time_it(fn: Callable) -> Callable:
+    """
+    Decorator to time function execution and log duration.
+    Only outputs if perf_monitoring is enabled.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        # If monitoring is OFF, just call the function
+        if not perf_monitoring:
+            return fn(*args, **kwargs)
+        
+        start_time = time.perf_counter()
+        result = fn(*args, **kwargs)
+        end_time = time.perf_counter()
+        duration = end_time - start_time
+        
+        notify(f"PERF: Function '{fn.__name__}' took {duration:.6f}s", level="info")
+        return result
+    return wrapper
 
 
 def setup_paths(year: int, base_dir: Path = Path("data")) -> tuple[Path, Path, list[Path]]:
@@ -86,5 +120,6 @@ def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles
         profile = json.load(f)
     with open(schema_path, "r") as f:
         schema = json.load(f)
+        
     jsonschema.validate(instance=profile, schema=schema)
     return profile
