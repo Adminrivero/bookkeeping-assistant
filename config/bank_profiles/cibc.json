@@ -1,5 +1,7 @@
 {
   "bank_name": "CIBC Costco MasterCard",
+  "skip_pages_by_index": [0],
+  "page_header_anchor": "Transactions from",
   "sections": [
     {
       "section_name": "Payments",

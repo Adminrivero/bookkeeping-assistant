@@ -641,9 +641,21 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                 if page_num in skip_indices:
                     continue
 
-                # 1) Get page left margin for alignment checks
-                # --- Prepare: Get page left margin for alignment checks ---
-                left_margin = float(get_page_left_margin(page, top_fraction=0.20, left_fraction=0.30) or 0.0)
+                # 1) Content-aware page skipping based on header anchor (cheap top-strip scan)
+                left_margin = 0.0
+                if header_anchor:
+                    try:
+                        header_area = page.crop((0, 0, page.width, page.height * 0.15))
+                        anchors = header_area.search(header_anchor)
+                    except Exception:
+                        anchors = []
+                    if not anchors:
+                        continue
+                    left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
+
+                # Fallback: if no header anchor or failed, compute left margin from top portion
+                if not left_margin:
+                    left_margin = float(get_page_left_margin(page, top_fraction=0.20, left_fraction=0.30) or 0.0)
 
                 # 2) Identify all section headers on this page
                 page_section_positions = []
