@@ -1,6 +1,7 @@
 {
   "bank_name": "Triangle MasterCard",
   "skip_pages_by_index": [0],
+  "page_header_anchor": "Details of your account summary",
   "table_settings": {
     "vertical_strategy": "explicit",
     "explicit_vertical_lines": [],
