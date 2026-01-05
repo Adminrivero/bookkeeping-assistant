@@ -214,13 +214,12 @@ def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float =
     Returns:
         float: The leftmost x0 coordinate of text in the specified top portion of the page.
     """
-    search_area = (0, 0, page.width * left_fraction, page.height * top_fraction)
-    
     # Debug section: visualize search area
     # if debug_mode:
-    #     debug_visualize_search_area(page, search_area, action="save")
+    #     debug_visualize_search_area(page, (0, 0, page.width * left_fraction, page.height * top_fraction), action="save")
     # End debug section
     
+    search_area = (0, 0, page.width * left_fraction, page.height * top_fraction)
     crop_area = page.crop(search_area)
     words_found = crop_area.extract_words()
 
@@ -277,6 +276,11 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
     Returns:
         dict|None: Bounding box dict or None if not found
     """
+    # Debug section: visualize search area
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area, action="save")
+    # End debug section
+    
     search_strip = page.crop(search_area_bbox)
     matches = search_strip.search(footer_text)
     
@@ -342,24 +346,33 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
 
 def get_table_header_edge(page, search_area_bbox, label_text, edge="left", margin=0):
     """
-    Finds a specific header label within a vertical area and returns its edge.
-    edge: "left" (returns x0 - margin) or "right" (returns x1 + margin)
-    """
-    # Create a vertical strip to search in
-    search_strip = page.crop(search_area_bbox)
+    Finds the x-coordinate of a table header edge by searching for a label text.
     
+    Args:
+        page: pdfplumber Page object
+        search_area_bbox: (left, top, right, bottom) tuple defining search area
+        label_text: text label to search for
+        edge: "left" or "right" indicating which edge to find
+        margin: int margin to add/subtract from found edge
+        
+    Returns:
+        float|None: x-coordinate of the edge or None if not found
+    """
     # Debug section: visualize search area
     # if debug_mode:
     #     debug_visualize_search_area(page, search_area_bbox, action="save")
-    # raw_text = search_strip.extract_text() or ""
-    # words_list = search_strip.extract_words()
+    #     search_strip = page.crop(search_area_bbox)
+    #     raw_text = search_strip.extract_text() or ""
+    #     words_list = search_strip.extract_words()
     # End debug section
     
+    # Create a vertical strip to search in
+    search_strip = page.crop(search_area_bbox)
+    
     # Clean label text for more robust matching (handle newlines or spaces)
-    # We search for the first word or a significant substring to avoid mismatch
+    # Search for the first word or a significant substring to avoid mismatch
     # e.g., if label is "TRANSACTION DATE", searching for "TRANSACTION" is safer.
-    search_query = label_text.split('\n')[0].split(' ')[0] 
-    # search_query = label_text.strip()
+    search_query = label_text.split('\n')[0].split(' ')[0]
     matches = search_strip.search(search_query)
     
     if matches:
@@ -382,12 +395,14 @@ def get_table_edges(page, search_area_bbox, vertical=False):
         vertical: bool, if True returns full bbox (left, right, top, bottom)
         
     Returns:
-        dict or None: {"coords": (left_x, right_x, top_y, bottom_y), "explicit_vertical_lines": [...]} or None if no lines found.
+        dict or None: Dictionary with table edges info or None if not found.
     """
     # Debug section: visualize search area
-    # if debug_mode:
-    #     debug_visualize_search_area(page, search_area_bbox, action="save")
+    if debug_mode:
+        debug_visualize_search_area(page, search_area_bbox, action="save")
     # End debug section
+    
+    table_edges = {"coords": (), "headers_bbox": (), "rows_bbox": (), "explicit_vertical_lines": []}
     
     # all_lines = page.within_bbox(search_area_bbox).lines
     all_lines = page.crop(search_area_bbox).lines
@@ -409,8 +424,6 @@ def get_table_edges(page, search_area_bbox, vertical=False):
     
     if not horizontal_lines:
         return None
-    
-    table_edges = {"coords": (), "explicit_vertical_lines": []}
     
     # Assume the first horizontal line group defines the table width
     left_x = horizontal_lines[0][0]["x0"]
@@ -477,20 +490,19 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                 left_x, right_x = item["left"], page.width
                 header_x_range = (left_x, item["right"])
                 
-                labels = section.get("header_labels", [])
-                labels = False
-                if labels:
-                    # Refine Horizontal Boundaries using header labels
-                    end_y = item["bottom"] + 60 # Approx height of header area
-                    # Determine Search Strip (a small vertical area containing the table headers)
-                    search_strip_bbox = (left_x, start_y, right_x, end_y)
-                    # Horizontal Boundaries: Find leftmost and rightmost text in the header row
-                    left_edge = get_table_header_edge(page, search_strip_bbox, labels[0], edge="left")
-                    right_edge = get_table_header_edge(page, search_strip_bbox, labels[-1], edge="right")
-                    if left_edge is not None:
-                        left_x = left_edge
-                    if right_edge is not None:
-                        right_x = right_edge
+                # labels = section.get("header_labels", [])
+                # if labels:
+                #     # Refine Horizontal Boundaries using header labels
+                #     end_y = item["bottom"] + 60 # Approx height of header area
+                #     # Determine Search Strip (a small vertical area containing the table headers)
+                #     search_strip_bbox = (left_x, start_y, right_x, end_y)
+                #     # Horizontal Boundaries: Find leftmost and rightmost text in the header row
+                #     left_edge = get_table_header_edge(page, search_strip_bbox, labels[0], edge="left")
+                #     right_edge = get_table_header_edge(page, search_strip_bbox, labels[-1], edge="right")
+                #     if left_edge is not None:
+                #         left_x = left_edge
+                #     if right_edge is not None:
+                #         right_x = right_edge
                 
                 # Vertical Boundaries: Define the search ceiling (start_y) and floor (end_y) for the table
                 max_y = page_section_positions[i+1]["top"] if i + 1 < len(page_section_positions) else page.height
@@ -597,15 +609,15 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     Args:
         pdf_path (Path): Path to the PDF file.
         bank (str): Bank identifier.
+        
     Returns:
         list[dict]: All transactions parsed from the PDF.
     """
     # If debug_mode — invoke debug parser to finetune extraction:
-    if debug_mode:
-        notify(f"Debug parsing enabled for {pdf_path.name} — invoking debug_parse_pdf()", "info")
-        all_transactions = debug_parse_pdf(pdf_path, bank)
-        # In debug mode, don't do production parsing (avoid double work / inconsistent results)
-        return [tx for section_rows in all_transactions.values() for tx in section_rows]
+    # if debug_mode:
+    #     notify(f"Debug parsing enabled for {pdf_path.name} — invoking debug_parse_pdf()", "info")
+    #     all_transactions = debug_parse_pdf(pdf_path, bank)
+    #     return [tx for section_rows in all_transactions.values() for tx in section_rows]
     # End debug section
 
     transactions = []
@@ -628,7 +640,6 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
     table_settings = profile.get("table_settings", {}) or {}
     skip_indices = set(profile.get("skip_pages_by_index", []) or [])
     header_anchor = profile.get("page_header_anchor", None)
-
     source_name = profile.get("bank_name", bank)
 
     # Track sections found on this statement (kept for potential future validation)
@@ -697,11 +708,10 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     if footer_marker:
                         search_area_bbox = (0.0, start_y, float(page.width), max_y)
                         header_x_range = (float(item["left"]), float(item["right"]))
-                        footer_bbox = get_section_footer_bbox(
-                            page, footer_marker, search_area_bbox, header_x_range=header_x_range
-                        )
+                        footer_bbox = get_section_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
                         if footer_bbox and float(footer_bbox["top"]) > start_y:
-                            end_y = float(footer_bbox["top"])
+                            # end_y = float(footer_bbox["top"])
+                            end_y = float(footer_bbox["bottom"]) + 5  # small padding below footer
 
                     # Guard: invalid vertical window
                     if end_y <= start_y + 2:
@@ -710,7 +720,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     # --- Table edges: refine crop box using horizontal rules (fast + stable) ---
                     strip_bbox = (0.0, start_y, float(page.width), end_y)
                     table_edges = get_table_edges(page, strip_bbox, vertical=True)
-                    if table_edges and "coords" in table_edges and len(table_edges["coords"]) == 4:
+                    if table_edges and "coords" in table_edges:
                         left_x, right_x, top_y, bottom_y = table_edges["coords"]
                         # Keep within page bounds
                         left_x = max(0.0, float(left_x))
@@ -719,12 +729,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                         bottom_y = min(float(page.height), float(bottom_y))
                     else:
                         # Fallback: reasonable corridor from left margin to page width
-                        left_x, right_x, top_y, bottom_y = (
-                            max(0.0, float(item["left"]) - 1.0),
-                            float(page.width),
-                            start_y,
-                            end_y,
-                        )
+                        left_x, right_x, top_y, bottom_y = (max(0.0, float(item["left"]) - 1.0), float(page.width), start_y, end_y)
 
                     # Guard: invalid crop
                     if right_x <= left_x + 2 or bottom_y <= top_y + 2:
@@ -734,7 +739,6 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     try:
                         cropped_page = page.crop(crop_box)
                     except Exception:
-                        # Keep quiet unless true error is needed; this is recoverable
                         continue
 
                     # --- Extraction settings: inject explicit verticals when available/configured ---
