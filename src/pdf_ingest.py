@@ -231,6 +231,38 @@ def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float =
     return page_left_margin
 
 
+def find_header_label_x_coordinate(page, search_area_bbox, label_text, edge="left", margin=0):
+    """
+    Find the x-coordinate of a table header label edge by searching for the label text.
+
+    Args:
+        page: pdfplumber Page object
+        search_area_bbox: (left, top, right, bottom) tuple defining search area
+        label_text: text label to search for
+        edge: "left" or "right" indicating which edge to return
+        margin: int margin to add/subtract from found edge
+
+    Returns:
+        float|None: x-coordinate of the edge or None if not found
+    """
+    search_strip = page.crop(search_area_bbox)
+
+    # Tokenize and try the most significant (longest) tokens first to avoid noisy matches
+    tokens = [t for t in re.split(r"\s+", label_text.strip()) if t]
+    tokens.sort(key=len, reverse=True)
+
+    for token in tokens:
+        matches = search_strip.search(token)
+        if matches:
+            m = matches[0]
+            if edge == "left":
+                return max(0.0, float(m.get("x0", 0.0)) - margin)
+            else:
+                return min(float(page.width), float(m.get("x1", page.width)) + margin)
+
+    return None
+
+
 def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Optional[float] = None, tolerance: float = 0.5):
     """
     Finds the bounding box of a section header by searching for match_text.
@@ -297,12 +329,12 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
         
     # Create a sorted list of horizontal line segments (grouped by their y0 coordinate)
     horizontal_lines = [group for _, group in sorted(y0_groups.items(), key=lambda kv: kv[0])]
-    # h_lines_top_coord = [grp[0]["top"] for grp in horizontal_lines]
     
     valid_matches = []
     for match in matches:
         text_top = match["top"]
         text_bottom = match["bottom"]
+        footer_bbox: Dict[str, Optional[dict]] = {"text_bbox": None, "line_bbox": None}
         
         # Check Gate 2: Line Proximity and Horizontal Coverage
         line_above = False
@@ -325,6 +357,7 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
             
             if is_vertically_aligned and is_horizontally_covering:
                 line_above = True
+                footer_bbox["line_bbox"] = {"x0": line_x0, "top": line_top, "x1": line_x1, "bottom": line_top}
                 break
         
         # Check Gate 3: Horizontal Overlap (if header bounds are provided)
@@ -335,53 +368,77 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
             overlaps_header = (match["x0"] > header_x0 and (match["x1"] <= header_x1 or match["x1"] <= (page.width * 0.5)))
 
         if line_above and overlaps_header:
-            valid_matches.append(match)
+            footer_bbox["text_bbox"] = {"x0": match["x0"], "top": match["top"], "x1": match["x1"], "bottom": match["bottom"]}
+            valid_matches.append(footer_bbox)
 
     if valid_matches:
-        # Return the top_most valid match's dict (x0, top, x1, bottom)
-        return min(valid_matches, key=lambda r: r["top"])
+        # Return the top_most valid match's dict
+        return min(valid_matches, key=lambda r: r["text_bbox"]["top"])
     
     return None
 
 
-def get_table_header_edge(page, search_area_bbox, label_text, edge="left", margin=0):
+def validate_table_presence(page, strip_bbox, section, footer_bbox=None) -> bool:
     """
-    Finds the x-coordinate of a table header edge by searching for a label text.
+    Validates if the current area contains a valid transaction table.
     
-    Args:
+    Logic:
+    1. If footer_bbox is provided, assume the structural "bottom" is valid.
+    2. If not, fall back to searching for at least one significant horizontal line.
+    3. In both cases, verify that a minimum percentage of column headers exist.
+    
+    args:
         page: pdfplumber Page object
-        search_area_bbox: (left, top, right, bottom) tuple defining search area
-        label_text: text label to search for
-        edge: "left" or "right" indicating which edge to find
-        margin: int margin to add/subtract from found edge
+        strip_bbox: (left, top, right, bottom) tuple defining the area to check
+        section: dict containing expected table section info, including columns
+        footer_bbox: Optional dict defining the footer bounding box, if available
         
     Returns:
-        float|None: x-coordinate of the edge or None if not found
+        bool: True if a valid table is detected, False otherwise
     """
-    # Debug section: visualize search area
-    # if debug_mode:
-    #     debug_visualize_search_area(page, search_area_bbox, action="save")
-    #     search_strip = page.crop(search_area_bbox)
-    #     raw_text = search_strip.extract_text() or ""
-    #     words_list = search_strip.extract_words()
-    # End debug section
+    crop = page.crop(strip_bbox)
     
-    # Create a vertical strip to search in
-    search_strip = page.crop(search_area_bbox)
+    # --- 1. Structural Validation ---
+    has_structure = False
     
-    # Clean label text for more robust matching (handle newlines or spaces)
-    # Search for the first word or a significant substring to avoid mismatch
-    # e.g., if label is "TRANSACTION DATE", searching for "TRANSACTION" is safer.
-    search_query = label_text.split('\n')[0].split(' ')[0]
-    matches = search_strip.search(search_query)
+    if footer_bbox and footer_bbox.get("line_bbox"):
+        # Optimization: Already found the footer line in the previous step
+        # Just verify it sits within our current strip_bbox
+        line = footer_bbox["line_bbox"]
+        if strip_bbox[1] <= line["top"] <= strip_bbox[3]:
+            has_structure = True
     
-    if matches:
-        if edge == "left":
-            return max(0, matches[0]["x0"] - margin)
-        else:
-            return min(page.width, matches[0]["x1"] + margin)
+    if not has_structure:
+        # Fallback: Manual search for horizontal lines (common in tables)
+        segments = [l for l in crop.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 20]
+        # Group line segments by y0 coord to find distinct lines that belong to the same horizontal divider (y-coordinate)
+        y0_groups = defaultdict(list)
+        for line in segments:
+            y0_groups[line["y0"]].append(line)
+        lines = [group for _, group in sorted(y0_groups.items(), key=lambda kv: kv[0])]
+        # Also check for rectangles (TD headers are often in boxes)
+        rects = [r for r in crop.rects if (r["x1"] - r["x0"]) > 20]
+        has_structure = len(lines) >= 1 or len(rects) >= 1
+
+    # --- 2. Content Validation (Header Keyword Match) ---
+    expected_cols = section.get("columns", {})
+    if not expected_cols:
+        return has_structure # Fallback if no columns defined
+        
+    found_count = 0
+    # Search for a subset of header keywords to ensure we are in the right section
+    for col_label in expected_cols.keys():
+        # Clean label for search (take first word/line)
+        search_term = col_label.split('\n')[0].strip()
+        if not search_term: continue
+        
+        if crop.search(search_term):
+            found_count += 1
             
-    return None
+    # Threshold: At least 50% of expected headers must be present
+    has_headers = found_count >= (len(expected_cols) // 2)
+
+    return has_structure and has_headers
 
 
 def get_table_edges(page, search_area_bbox, vertical=False):
@@ -497,8 +554,8 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                 #     # Determine Search Strip (a small vertical area containing the table headers)
                 #     search_strip_bbox = (left_x, start_y, right_x, end_y)
                 #     # Horizontal Boundaries: Find leftmost and rightmost text in the header row
-                #     left_edge = get_table_header_edge(page, search_strip_bbox, labels[0], edge="left")
-                #     right_edge = get_table_header_edge(page, search_strip_bbox, labels[-1], edge="right")
+                #     left_edge = find_header_label_x_coordinate(page, search_strip_bbox, labels[0], edge="left")
+                #     right_edge = find_header_label_x_coordinate(page, search_strip_bbox, labels[-1], edge="right")
                 #     if left_edge is not None:
                 #         left_x = left_edge
                 #     if right_edge is not None:
@@ -516,7 +573,7 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                     search_area_bbox = (left_x, start_y, right_x, max_y)
                     footer_bbox = get_section_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
                     if footer_bbox:
-                        end_y = footer_bbox["top"]
+                        end_y = footer_bbox["text_bbox"]["bottom"] + 5 # Slight padding below footer
                     
                 # Table Boundaries: Adjust horizontal and vertical boundaries based on table horizontal lines
                 search_strip_bbox = (0, start_y, page.width, end_y)
@@ -705,21 +762,34 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
 
                     # --- Optional footer tightening ---
                     footer_marker = section.get("footer_row_text")
+                    footer_bbox = None
                     if footer_marker:
                         search_area_bbox = (0.0, start_y, float(page.width), max_y)
                         header_x_range = (float(item["left"]), float(item["right"]))
                         footer_bbox = get_section_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
-                        if footer_bbox and float(footer_bbox["top"]) > start_y:
-                            # end_y = float(footer_bbox["top"])
-                            end_y = float(footer_bbox["bottom"]) + 5  # small padding below footer
+                        if footer_bbox and float(footer_bbox["text_bbox"]["top"]) > start_y:
+                            # end_y = float(footer_bbox["text_bbox"]["top"])
+                            end_y = float(footer_bbox["text_bbox"]["bottom"]) + 5  # small padding below footer
 
                     # Guard: invalid vertical window
                     if end_y <= start_y + 2:
                         continue
-
-                    # --- Table edges: refine crop box using horizontal rules (fast + stable) ---
-                    strip_bbox = (0.0, start_y, float(page.width), end_y)
+                    
+                    # --- Table: validation & refined edge detection ---
+                    strip_bbox = (
+                        float(footer_bbox["line_bbox"]["x0"]) if footer_bbox and footer_bbox.get("line_bbox") else 0.0,
+                        float(start_y) - 20, # Subtract 20 to include the header labels
+                        float(footer_bbox["line_bbox"]["x1"]) if footer_bbox and footer_bbox.get("line_bbox") else float(page.width),
+                        float(end_y),
+                    )
+                    
+                    # Gate 1: Ensure the area actually looks like a table for this bank statement
+                    if not validate_table_presence(page, strip_bbox, section, footer_bbox=footer_bbox):
+                        continue
+                    
+                    # Gate 2: Get precise coordinates based on text anchors and lines
                     table_edges = get_table_edges(page, strip_bbox, vertical=True)
+                    
                     if table_edges and "coords" in table_edges:
                         left_x, right_x, top_y, bottom_y = table_edges["coords"]
                         # Keep within page bounds
