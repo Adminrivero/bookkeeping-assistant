@@ -778,13 +778,13 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                         # text = header_area.extract_text() or ""
                         # found = header_anchor in text
                         # End debug section
-                        anchors = header_area.search(header_anchor)
+                        pattern = r'\s+'.join(re.escape(word) for word in header_anchor.split())
+                        anchors = header_area.search(pattern, flags=re.IGNORECASE)
                         if not anchors:
                             continue
+                        left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
                     except Exception:
                         anchors = []
-                    
-                    left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
 
                 # Fallback: if no header anchor or failed, compute left margin from top portion
                 if not left_margin:
