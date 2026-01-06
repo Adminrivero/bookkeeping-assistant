@@ -427,9 +427,34 @@ def validate_table_presence(page, strip_bbox, section, footer_bbox=None) -> bool
     header_labels = section.get("header_labels", [])
     if not header_labels:
         return has_structure  # If no header labels defined, rely solely on structural validation.
-        
+
+    # Dynamic header zone estimation
+    header_buffer = 60
+    header_zone_bbox = (
+        strip_bbox[0],
+        strip_bbox[1],
+        strip_bbox[2],
+        min(strip_bbox[1] + header_buffer, strip_bbox[3])
+    )
+    
+    bank_name = section.get("bank_name", "")
+    if bank_name == "TD Visa":
+        # Find significant rectangle that could be enclosing the header and adjust the header zone accordingly
+        td_rects = [r for r in crop.rects if (r["x1"] - r["x0"]) > 100 and (r["y1"] - r["y0"]) > 20]
+        if td_rects:
+            # Assume the top-most large rectangle is the header box
+            td_header_rect = min(td_rects, key=lambda r: r["top"])
+            header_zone_bbox = (
+                strip_bbox[0],
+                td_header_rect["top"] - 2,  # small buffer above the rect
+                strip_bbox[2],
+                td_header_rect["bottom"] + 5  # small buffer below the rect
+            )
+    
+    header_crop = page.crop(header_zone_bbox)
+    text = header_crop.extract_text() or ""
+    
     found_count = 0
-    text = crop.extract_text() or ""
     for label in header_labels:
         # Generate a flexible regex pattern for each header label (for potential OCR issues, multi-line headers, or extra whitespace)
         # Base pattern: Replace spaces in label with multi-line space/newline bridge
@@ -813,7 +838,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     # --- Table: validation & refined edge detection ---
                     strip_bbox = (
                         float(footer_bbox["line_bbox"]["x0"]) if footer_bbox and footer_bbox.get("line_bbox") else 0.0,
-                        float(start_y) - 2,
+                        float(start_y),
                         float(footer_bbox["line_bbox"]["x1"]) if footer_bbox and footer_bbox.get("line_bbox") else float(page.width),
                         float(end_y),
                     )
