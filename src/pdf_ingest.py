@@ -201,7 +201,6 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
 
     return saved_path
 
-
 # @time_it
 def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
     """Find the leftmost x0 coordinate of text in the top portion of the page.
@@ -380,7 +379,8 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
 
 def validate_table_presence(page, strip_bbox, section, footer_bbox=None) -> bool:
     """
-    Validates if the current area contains a valid transaction table.
+    Validates table presence using Structural Validation and Regex-based 
+    Content Validation to handle multi-line headers and encoding artifacts.
     
     Logic:
     1. If footer_bbox is provided, assume the structural "bottom" is valid.
@@ -396,47 +396,83 @@ def validate_table_presence(page, strip_bbox, section, footer_bbox=None) -> bool
     Returns:
         bool: True if a valid table is detected, False otherwise
     """
+    # Debug section: visualize search area
+    if debug_mode:
+        debug_visualize_search_area(page, strip_bbox, action="save")
+    # End debug section
+    
     crop = page.crop(strip_bbox)
     
     # --- 1. Structural Validation ---
     has_structure = False
-    
     if footer_bbox and footer_bbox.get("line_bbox"):
-        # Optimization: Already found the footer line in the previous step
-        # Just verify it sits within our current strip_bbox
+        # A footer horizontal line within strip_bbox is strong evidence of a table.
         line = footer_bbox["line_bbox"]
         if strip_bbox[1] <= line["top"] <= strip_bbox[3]:
             has_structure = True
     
     if not has_structure:
         # Fallback: Manual search for horizontal lines (common in tables)
-        segments = [l for l in crop.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 20]
+        segments = [l for l in crop.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1]
         # Group line segments by y0 coord to find distinct lines that belong to the same horizontal divider (y-coordinate)
         y0_groups = defaultdict(list)
         for line in segments:
             y0_groups[line["y0"]].append(line)
         lines = [group for _, group in sorted(y0_groups.items(), key=lambda kv: kv[0])]
         # Also check for rectangles (TD headers are often in boxes)
-        rects = [r for r in crop.rects if (r["x1"] - r["x0"]) > 20]
+        rects = [r for r in crop.rects if (r["x1"] - r["x0"]) > 1]
         has_structure = len(lines) >= 1 or len(rects) >= 1
 
-    # --- 2. Content Validation (Header Keyword Match) ---
-    expected_cols = section.get("columns", {})
-    if not expected_cols:
-        return has_structure # Fallback if no columns defined
+    # --- 2. Content Validation (Header Regex Match) ---
+    header_labels = section.get("header_labels", [])
+    if not header_labels:
+        return has_structure  # If no header labels defined, rely solely on structural validation.
         
     found_count = 0
-    # Search for a subset of header keywords to ensure we are in the right section
-    for col_label in expected_cols.keys():
-        # Clean label for search (take first word/line)
-        search_term = col_label.split('\n')[0].strip()
-        if not search_term: continue
+    text = crop.extract_text() or ""
+    for label in header_labels:
+        # Generate a flexible regex pattern for each header label (for potential OCR issues, multi-line headers, or extra whitespace)
+        # Base pattern: Replace spaces in label with multi-line space/newline bridge
+        pattern_content = re.escape(label).replace(r'\ ', r'\s*[\n\r]?\s*')
         
-        if crop.search(search_term):
+        # Special Case: Amount, optional space and encoding symbols
+        if "AMOUNT" in label.upper():
+            # Matches 'AMOUNT', optional space, then '(' + anything + ')'
+            pattern_content = r'AMOUNT\s*(\([^\)]*\))?'
+        
+        # Special Case: Description variations
+        if "DESCRIPTION" in label.upper():
+            # Allow for "TRANS" "TRANSACTION", "ACTIVITY" prefix
+            # pattern_content = r'(TRANS|ACTIVITY|TRANSACTION)?\s*[\n\r]?\s*DESCRIPTION'
+            # Allow up to 2 arbitrary prefix tokens before "DESCRIPTION" (letters, digits, &, -, /, .)
+            pattern_content = r'(?:[A-Z0-9&\-/\.]+(?:\s+[A-Z0-9&\-/\.]+){0,2}\s*)?DESCRIPTION\b'
+        
+        # Special Case: The "Interleaved Bridge" strategy for multi-line headers
+        if "\n" in label:
+            # For labels expected to be multi-line, allow for an interleaved line of up to 3 words between them
+            parts = label.split("\n")
+            if len(parts) == 2:
+                part1, part2 = map(re.escape, parts)
+                # Allow either whitespace/newline or a single short interleaved line (up to ~60 chars)
+                joiner = r'(?:\s+|[^\n]{1,60}\n[^\n]{1,60})'
+                pattern_content = rf'{part1}\s*(?:{joiner})?\s*{part2}'
+            else:
+                # For more than 2 lines, allow for flexible whitespace/newlines between all parts
+                escaped_parts = [re.escape(p) for p in parts]
+                pattern_content = r'\s*[\n\r]?\s*'.join(escaped_parts)
+        
+        # Compile with IGNORECASE for flexibility
+        pattern = re.compile(pattern_content, re.IGNORECASE)
+        
+        # Search for the header lable pattern
+        if pattern.search(text):
             found_count += 1
             
-    # Threshold: At least 50% of expected headers must be present
-    has_headers = found_count >= (len(expected_cols) // 2)
+    # --- 3. Threshold Validation ---
+    # Require at least 75% of headers for high-confidence sections
+    # but can fallback to 50% for noisier statements.
+    threshold = 0.75 if len(header_labels) > 2 else 0.5
+    has_headers = (found_count / len(header_labels)) >= threshold if header_labels else True
 
     return has_structure and has_headers
 
@@ -502,7 +538,6 @@ def get_table_edges(page, search_area_bbox, vertical=False):
         table_edges["explicit_vertical_lines"][0] = first_group[0]["x0"]  # Replace first edge with left edge
     
     return table_edges
-
 
 # @time_it
 def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
@@ -657,7 +692,7 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
     total_tx = sum(len(x) for x in all_data.values())
     print(f"\nTotal Transactions Extracted: {total_tx}")
     return all_data
-    
+
 
 def parse_pdf(pdf_path: pathlib.Path, bank: str):
     """
@@ -778,7 +813,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     # --- Table: validation & refined edge detection ---
                     strip_bbox = (
                         float(footer_bbox["line_bbox"]["x0"]) if footer_bbox and footer_bbox.get("line_bbox") else 0.0,
-                        float(start_y) - 20, # Subtract 20 to include the header labels
+                        float(start_y) - 2,
                         float(footer_bbox["line_bbox"]["x1"]) if footer_bbox and footer_bbox.get("line_bbox") else float(page.width),
                         float(end_y),
                     )
