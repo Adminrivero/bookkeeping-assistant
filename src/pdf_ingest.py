@@ -377,7 +377,7 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
     return None
 
 
-def validate_table_presence(page, strip_bbox, section, footer_bbox=None) -> bool:
+def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=None) -> bool:
     """
     Validates table presence using Structural Validation and Regex-based 
     Content Validation to handle multi-line headers and encoding artifacts.
@@ -437,7 +437,6 @@ def validate_table_presence(page, strip_bbox, section, footer_bbox=None) -> bool
         min(strip_bbox[1] + header_buffer, strip_bbox[3])
     )
     
-    bank_name = section.get("bank_name", "")
     if bank_name == "TD Visa":
         # Find significant rectangle that could be enclosing the header and adjust the header zone accordingly
         td_rects = [r for r in crop.rects if (r["x1"] - r["x0"]) > 100 and (r["y1"] - r["y0"]) > 20]
@@ -774,11 +773,17 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                 if header_anchor:
                     try:
                         header_area = page.crop((0, 0, page.width, page.height * 0.15))
+                        # Debug section: visualize search area
+                        # debug_visualize_search_area(page, (0, 0, page.width, page.height * 0.15), action="save")
+                        # text = header_area.extract_text() or ""
+                        # found = header_anchor in text
+                        # End debug section
                         anchors = header_area.search(header_anchor)
+                        if not anchors:
+                            continue
                     except Exception:
                         anchors = []
-                    if not anchors:
-                        continue
+                    
                     left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
 
                 # Fallback: if no header anchor or failed, compute left margin from top portion
@@ -844,7 +849,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     )
                     
                     # Gate 1: Ensure the area actually looks like a table for this bank statement
-                    if not validate_table_presence(page, strip_bbox, section, footer_bbox=footer_bbox):
+                    if not validate_table_presence(page, strip_bbox, section, source_name, footer_bbox=footer_bbox):
                         continue
                     
                     # Gate 2: Get precise coordinates based on text anchors and lines
