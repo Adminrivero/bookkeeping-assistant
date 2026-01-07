@@ -201,6 +201,16 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
 
     return saved_path
 
+
+def _normalize_segment(seg):
+    """Normalize segment to a consistent bbox dict with floats."""
+    return {
+        "x0": float(seg.get("x0", 0.0)),
+        "x1": float(seg.get("x1", 0.0)),
+        "top": float(seg.get("top", seg.get("y0", 0.0))),
+        "bottom": float(seg.get("bottom", seg.get("y1", 0.0))),
+    }
+
 # @time_it
 def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
     """Find the leftmost x0 coordinate of text in the top portion of the page.
@@ -318,22 +328,13 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
     if not matches:
         return None
     
-    # Normalize horizontal lines into segments
-    all_lines = [
-        {"x0": l["x0"], "x1": l["x1"], "top": l["top"], "bottom": l["bottom"]} 
-        for l in search_strip.lines 
-        if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1
-    ]
+    # Normalize horizontal lines & thin rectangles into segments
+    combined_segments = (
+        [_normalize_segment(l) for l in search_strip.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1] + 
+        [_normalize_segment(r) for r in search_strip.rects if (r["x1"] - r["x0"]) > 1 and abs(r["bottom"] - r["top"]) < 3]
+    )
     
-    # Normalize thin rectangles into line-like segments
-    all_rects = [
-        {"x0": r["x0"], "x1": r["x1"], "top": r["top"], "bottom": r["bottom"]}
-        for r in search_strip.rects 
-        if (r["x1"] - r["x0"]) > 1 and abs(r["bottom"] - r["top"]) < 3
-    ]
-    
-    # Combine and group segments by Y-coordinate to form horizontal lines
-    combined_segments = all_lines + all_rects
+    # Group segments by Y-coordinate to form horizontal lines
     y_groups = defaultdict(list)
     for seg in combined_segments:
         y_key = round(seg["top"], 1)  # Group by rounded top coordinate
@@ -356,6 +357,7 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
         line_above = False
         for l in horizontal_lines:
             line_top= l[0]["top"]
+            line_bottom = l[0]["bottom"]
             line_x0 = l[0]["x0"]
             line_x1 = l[-1]["x1"]
             
@@ -373,7 +375,7 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
             
             if is_vertically_aligned and is_horizontally_covering:
                 line_above = True
-                footer_bbox["line_bbox"] = {"x0": line_x0, "top": line_top, "x1": line_x1, "bottom": line_top}
+                footer_bbox["line_bbox"] = {"x0": line_x0, "top": line_top, "x1": line_x1, "bottom": line_bottom}
                 break
         
         # Check Gate 3: Horizontal Overlap (if header bounds are provided)
@@ -384,7 +386,7 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
             overlaps_header = (match["x0"] >= header_x0 and (match["x1"] <= header_x1 or match["x1"] <= (page.width * 0.5)))
 
         if line_above and overlaps_header:
-            footer_bbox["text_bbox"] = {"x0": match["x0"], "top": match["top"], "x1": match["x1"], "bottom": match["bottom"]}
+            footer_bbox["text_bbox"] = {"x0": match["x0"], "top": text_top, "x1": match["x1"], "bottom": text_bottom}
             valid_matches.append(footer_bbox)
 
     if valid_matches:
@@ -429,7 +431,7 @@ def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=No
             has_structure = True
     
     if not has_structure:
-        # Fallback: Manual search for horizontal lines (common in tables)
+        # Fallback: Manual search for horizontal separator (common in tables)
         segments = [l for l in crop.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1]
         # Group line segments by y0 coord to find distinct lines that belong to the same horizontal divider (y-coordinate)
         y0_groups = defaultdict(list)
