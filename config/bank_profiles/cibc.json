@@ -2,6 +2,18 @@
   "bank_name": "CIBC Costco MasterCard",
   "skip_pages_by_index": [0],
   "page_header_anchor": "Transactions from",
+  "table_settings": {
+    "vertical_strategy": "explicit",
+    "explicit_vertical_lines": [],
+    "horizontal_strategy": "text",
+    "text_x_tolerance": 25,
+    "text_y_tolerance": 4,
+    "min_words_vertical": 1,
+    "min_words_horizontal": 1,
+    "intersection_tolerance": 15,
+    "snap_tolerance": 5,
+    "join_tolerance": 5
+  },
   "sections": [
     {
       "section_name": "Payments",
@@ -12,6 +24,7 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": ["Trans\ndate", "Post\ndate", "Description", "Amount($)"],
       "footer_row_text": "Total payments",
       "skip_footer_rows": true
     },
@@ -22,9 +35,9 @@
         "transaction_date": 0,
         "posting_date": 1,
         "description": 2,
-        "annual_interest_rate": 3,
-        "amount": 4
+        "amount": 3
       },
+      "header_labels": ["Trans\ndate", "Post\ndate", "Description", "Amount($)"],
       "footer_row_text": "Total interest this period",
       "skip_footer_rows": true
     },
@@ -38,6 +51,7 @@
         "spend_category": 3,
         "amount": 4
       },
+      "header_labels": ["Trans\ndate", "Post\ndate", "Description", "Spend Categories", "Amount($)"],
       "footer_row_text": "Total for 5268",
       "skip_footer_rows": true
     }
