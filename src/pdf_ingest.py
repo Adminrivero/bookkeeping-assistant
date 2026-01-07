@@ -292,7 +292,7 @@ def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Opt
     return None
 
 
-def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=None):
+def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=None):
     """
     Finds the bounding box of a section footer by searching for footer_text
     within a defined search area and validating its position relative to the header.
@@ -308,8 +308,8 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
         dict|None: Bounding box dict or None if not found
     """
     # Debug section: visualize search area
-    # if debug_mode:
-    #     debug_visualize_search_area(page, search_area, action="save")
+    if debug_mode:
+        debug_visualize_search_area(page, search_area_bbox, action="save")
     # End debug section
     
     search_strip = page.crop(search_area_bbox)
@@ -318,16 +318,33 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
     if not matches:
         return None
     
-    # Get all horizontal lines in the search area once to avoid repeated calls
-    all_lines = [l for l in search_strip.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1]
+    # Normalize horizontal lines into segments
+    all_lines = [
+        {"x0": l["x0"], "x1": l["x1"], "top": l["top"], "bottom": l["bottom"]} 
+        for l in search_strip.lines 
+        if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > 1
+    ]
     
-    # Group line segments by y0 coord to find distinct lines that belong to the same horizontal divider (y-coordinate)
-    y0_groups = defaultdict(list)
-    for line in all_lines:
-        y0_groups[line["y0"]].append(line)
+    # Normalize thin rectangles into line-like segments
+    all_rects = [
+        {"x0": r["x0"], "x1": r["x1"], "top": r["top"], "bottom": r["bottom"]}
+        for r in search_strip.rects 
+        if (r["x1"] - r["x0"]) > 1 and abs(r["bottom"] - r["top"]) < 3
+    ]
+    
+    # Combine and group segments by Y-coordinate to form horizontal lines
+    combined_segments = all_lines + all_rects
+    y_groups = defaultdict(list)
+    for seg in combined_segments:
+        y_key = round(seg["top"], 1)  # Group by rounded top coordinate
+        y_groups[y_key].append(seg)
         
-    # Create a sorted list of horizontal line segments (grouped by their y0 coordinate)
-    horizontal_lines = [group for _, group in sorted(y0_groups.items(), key=lambda kv: kv[0])]
+    # Create a sorted list of horizontal lines
+    horizontal_lines = [
+        g_sorted for _, group in sorted(y_groups.items())
+        if (g_sorted := sorted(group, key=lambda s: s["x0"])) and (g_sorted[-1]["x1"] - g_sorted[0]["x0"] > 10)
+    ]
+    horizontal_lines.sort(key=lambda l: l[0]["top"], reverse=True)
     
     valid_matches = []
     for match in matches:
@@ -343,12 +360,12 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
             line_x1 = l[-1]["x1"]
             
             # 1. Vertical Proximity Gate
-            # Allow the line to be up to 15 points above the text and up to 2 points 'inside' the text box
-            is_vertically_aligned = (text_top - 15) <= line_top <= (text_top + 2)
+            # Allow the line to be up to 5 points above the text and up to 2 points 'inside' the text box
+            is_vertically_aligned = (text_top - 5) <= line_top <= (text_top + 2)
             
-            # Ensure the line is physically above the text midline (restrict it to a 15-points range)
+            # Ensure the line is physically above the text midline (restrict it to a 5-points range)
             # text_midline = (text_top + text_bottom) / 2
-            # is_vertically_aligned = (text_midline - 15) <= line_top < text_midline
+            # is_vertically_aligned = (text_midline - 5) <= line_top < text_midline
             
             # 2. Horizontal Coverage Gate
             # Check if the line starts before and ends after the text box horizontally
@@ -364,7 +381,7 @@ def get_section_footer_bbox(page, footer_text, search_area_bbox, header_x_range=
         if header_x_range:
             # Check if the footer text is roughly within the same horizontal corridor
             header_x0, header_x1 = header_x_range
-            overlaps_header = (match["x0"] > header_x0 and (match["x1"] <= header_x1 or match["x1"] <= (page.width * 0.5)))
+            overlaps_header = (match["x0"] >= header_x0 and (match["x1"] <= header_x1 or match["x1"] <= (page.width * 0.5)))
 
         if line_above and overlaps_header:
             footer_bbox["text_bbox"] = {"x0": match["x0"], "top": match["top"], "x1": match["x1"], "bottom": match["bottom"]}
@@ -630,7 +647,7 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
                 if footer_marker:
                     # Define search area for footer: from start_y to max_y
                     search_area_bbox = (left_x, start_y, right_x, max_y)
-                    footer_bbox = get_section_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
+                    footer_bbox = get_table_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
                     if footer_bbox:
                         end_y = footer_bbox["text_bbox"]["bottom"] + 5 # Slight padding below footer
                     
@@ -831,7 +848,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     if footer_marker:
                         search_area_bbox = (0.0, start_y, float(page.width), max_y)
                         header_x_range = (float(item["left"]), float(item["right"]))
-                        footer_bbox = get_section_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
+                        footer_bbox = get_table_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
                         if footer_bbox and float(footer_bbox["text_bbox"]["top"]) > start_y:
                             # end_y = float(footer_bbox["text_bbox"]["top"])
                             end_y = float(footer_bbox["text_bbox"]["bottom"]) + 5  # small padding below footer
