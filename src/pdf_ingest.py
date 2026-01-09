@@ -203,6 +203,70 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
     return saved_path
 
 
+def debug_visualize_column_zones(page, crop_bbox: tuple, break_points: List[float], action: str = "save", filename: Optional[str] = None) -> Optional[pathlib.Path]:
+    """
+    Visualizes estimated column zones by drawing rectangles between vertical breakpoints.
+    Useful for tuning fallback logic in tables without explicit horizontal lines.
+    
+    Args:
+        page: pdfplumber.Page object
+        crop_bbox: (left, top, right, bottom) of the header area to visualize
+        break_points: List of X-coordinates (e.g., [x0, x1, x2, x3, x4] for 4 columns)
+        action: "save", "show", or "save_show"
+        filename: Optional custom filename for the debug image
+        
+    Returns:
+        Optional[Path]: Path to saved debug image if saved, otherwise None
+    """
+    # 1. Prepare the crop and the image
+    search_strip = page.crop(crop_bbox)
+    im = search_strip.to_image(resolution=150) # usually enough for debug
+    
+    # 2. Draw the column rectangles
+    # Breakpoints: [bp0, bp1, bp2, bp3, bp4] defines 4 columns
+    for i in range(len(break_points) - 1):
+        col_x0 = break_points[i]
+        col_x1 = break_points[i+1]
+        
+        # Define rectangle for the current column
+        column_rect = (col_x0, crop_bbox[1], col_x1, crop_bbox[3])
+        
+        # Alternating colors can help distinguish edges
+        stroke_color = "#FF0000" if i % 2 == 0 else "#0000FF"
+        im.draw_rect(column_rect, stroke=stroke_color, stroke_width=2, fill=None)
+        
+        # Optional: Label the column index for even better debugging
+        # im.draw_text(str(i), (col_x0 + 2, crop_bbox[1] + 2), font_size=10)
+
+    # 3. Handle Saving/Showing the debug image
+    action = action.lower()
+    base_path = pathlib.Path.cwd() / ".pydebug"
+    saved_path = None
+
+    if "save" in action:
+        if not filename:
+            filename = f"debug_cols_{int(time.time())}.png"
+        if not base_path.exists():
+            base_path.mkdir(parents=True)
+        
+        final_file = base_path / filename
+        im.save(final_file)
+        saved_path = final_file
+
+    if "show" in action:
+        try:
+            # Using the internal PIL image object to show
+            im.original.show()
+        except Exception:
+            if saved_path is None:
+                tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                im.save(tmp.name)
+                saved_path = pathlib.Path(tmp.name)
+            webbrowser.open(saved_path.as_uri())
+
+    return saved_path
+
+
 def _build_header_pattern(label: str) -> re.Pattern:
     """
     Return a compiled, case-insensitive regex that robustly matches a header label
