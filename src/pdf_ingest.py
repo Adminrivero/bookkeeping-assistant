@@ -204,11 +204,43 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
 
 def _build_header_pattern(label: str) -> re.Pattern:
     """
-    Todo: Implement a function that builds a robust regex pattern for matching header labels,
-    accounting for common OCR artifacts such as newlines, extra spaces, and minor misspellings.
+    Return a compiled, case-insensitive regex that robustly matches a header label
+    in PDF/OCR-extracted text, allowing flexible whitespace and line breaks and
+    handling special cases (e.g., 'AMOUNT' variants and 'DESCRIPTION' prefixes).
+    
+    Args:
+        label (str): The header label to build a pattern for (e.g., "TRANSACTION\nDATE").
+
+    Returns:
+        re.Pattern: Compiled regex pattern for matching the header label in extracted text.
     """
-    # Return an empty regex pattern for now as a placeholder
-    return re.compile(re.escape(label), re.IGNORECASE)
+    # Base pattern: Replace spaces in label with multi-line space/newline bridge
+    pattern_content = re.escape(label).replace(r"\ ", r"\s*[\n\r]?\s*")
+
+    # SPECIAL CASE: Amount, optional space and encoding symbols
+    if "AMOUNT" in label.upper():
+        # Matches 'AMOUNT', optional space, then '(' + anything + ')'
+        pattern_content = r'AMOUNT\s*(\([^\)]*\))?'
+
+    # SPECIAL CASE: Description variations
+    if "DESCRIPTION" in label.upper():
+        # Allow for "TRANS" "TRANSACTION", "ACTIVITY" prefix
+        # pattern_content = r'(TRANS|ACTIVITY|TRANSACTION)?\s*[\n\r]?\s*DESCRIPTION'
+        # Allow up to 2 arbitrary prefix tokens before "DESCRIPTION" (letters, digits, &, -, /, .)
+        pattern_content = r'(?:[A-Z0-9&\-/\.]+(?:\s+[A-Z0-9&\-/\.]+){0,2}\s*)?DESCRIPTION\b'
+
+    # SPECIAL CASE: The "Interleaved Bridge" strategy for multi-line headers
+    if "\n" in label:
+        parts = label.split("\n")
+        if len(parts) == 2:
+            part1, part2 = map(re.escape, parts)
+            joiner = r'(?:\s+|[^\n]{1,60}\n[^\n]{1,60})'
+            pattern_content = rf'{part1}\s*(?:{joiner})?\s*{part2}'
+        else:
+            escaped_parts = [re.escape(p) for p in parts]
+            pattern_content = r'\s*[\n\r]?\s*'.join(escaped_parts)
+
+    return re.compile(pattern_content, re.IGNORECASE)
 
 
 def _extract_horizontal_lines(cropped_search_area, ascending=True, consolidate_segments=True, min_seg_length=1, min_width=10, max_gap=3) -> List[List[Dict[str, float]]]:
