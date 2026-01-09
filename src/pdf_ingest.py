@@ -243,15 +243,56 @@ def _build_header_pattern(label: str) -> re.Pattern:
     return re.compile(pattern_content, re.IGNORECASE)
 
 
+def _normalize_segment(seg):
+    """Normalize segment to a consistent bbox dict with floats."""
+    return {
+        "x0": float(seg.get("x0", 0.0)),
+        "x1": float(seg.get("x1", 0.0)),
+        "top": float(seg.get("top", seg.get("y0", 0.0))),
+        "bottom": float(seg.get("bottom", seg.get("y1", 0.0))),
+    }
+
+
 def _extract_horizontal_lines(cropped_search_area, ascending=True, consolidate_segments=True, min_seg_length=1, min_width=10, max_gap=3) -> List[List[Dict[str, float]]]:
     """
-    Todo: Implement a function that extracts horizontal lines from a cropped search area, 
-    consolidating nearby line segments into single lines to improve robustness against fragmented line detections. 
-    This function should return a list of horizontal lines, where each line is represented as a list 
-    of its constituent segments (dicts with x0, top, x1, bottom). The function should also allow filtering lines 
-    based on minimum segment length and maximum gap between segments to be consolidated.
+    Extract horizontal lines from a cropped search area, with options to consolidate segments.
+
+    Args:
+        cropped_search_area: pdfplumber cropped page object
+        ascending: bool indicating sort order by Y-coordinate (default: True)
+        consolidate_segments: bool to merge nearby line segments into single lines (default: True)
+        min_seg_length: minimum length of line segments to consider (default: 1)
+        max_gap: maximum gap between segments to be consolidated into a single line (default: 3)
+
+    Returns:
+        list[list[dict]]: List of horizontal lines, each line is a list of segment dicts with keys 'x0', 'x1', 'top', 'bottom'
     """
-    return []
+    # Normalize horizontal lines & thin rectangles into segments
+    combined_segments = (
+        [_normalize_segment(l) for l in cropped_search_area.lines if abs(l["y0"] - l["y1"]) == 0 and (l["x1"] - l["x0"]) > min_seg_length] + 
+        [_normalize_segment(r) for r in cropped_search_area.rects if (r["x1"] - r["x0"]) > min_seg_length and abs(r["bottom"] - r["top"]) < max_gap]
+    )
+    
+    if consolidate_segments:
+        # Group segments by Y-coordinate to form horizontal lines
+        y_groups = defaultdict(list)
+        for seg in combined_segments:
+            y_key = round(seg["top"], 1)  # Group by rounded top coordinate
+            y_groups[y_key].append(seg)
+        
+        # Create a sorted (desc) list of horizontal lines (each is a list of segments)
+        horizontal_lines = [
+            g_sorted for _, group in sorted(y_groups.items())
+            if (g_sorted := sorted(group, key=lambda s: s["x0"])) and (g_sorted[-1]["x1"] - g_sorted[0]["x0"] > min_width)
+        ]
+        
+        # Sort lines by Y-coordinate
+        horizontal_lines.sort(key=lambda l: l[0]["top"], reverse=not ascending)
+        return horizontal_lines
+    
+    # If not consolidating, return each normalized segment as a single-element list so the return type is consistent
+    normalized = sorted([_normalize_segment(s) for s in combined_segments], key=lambda s: s["top"], reverse=not ascending)
+    return [[seg] for seg in normalized]
 
 # @time_it
 def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
