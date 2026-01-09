@@ -551,16 +551,25 @@ def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=No
     return has_structure and has_headers
 
 
+def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: float = 2.0) -> Dict[str, Optional[Dict|list]]:
+    """Todo: Finds the bounding box of the table header by searching for header labels and associated horizontal lines."""
+    header_bbox: Dict[str, Optional[dict|list]] = {
+        "labels_bbox": None,    # Bounding box encompassing all header labels found, used for vertical boundary estimation
+        "line_bbox": None,      # Bounding box of the horizontal line under the header, if any
+        "vertical_lines_bp": [] # List of breaking points where vertical lines intersect the header zone, used for column boundary estimation
+    }
+    return header_bbox
+
+
 def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None):
     """
-    Todo: Implement a function that detects table edges (left, right, top, bottom) 
-    based on the presence of horizontal lines (including footer line) and vertical lines, 
-    as well as the positions of the header labels. This function should return refined coordinates 
-    for cropping the table area, which can significantly improve table extraction accuracy.
-    This function can utilize the header_bbox and footer_bbox to define the vertical boundaries, 
-    and use the vertical line breakpoints from the header_bbox to define the horizontal boundaries. 
-    Additionally, it can look for vertical lines that intersect with the header zone to further refine column boundaries.
+    Determines table boundaries by combining text-header detection and geometric line analysis.
     """
+    # Debug section: visualize search area
+    if debug_mode:
+        debug_visualize_search_area(page, search_area_bbox, action="save")
+    # End debug section
+
     table_edges = {
         "coords": (),
         "headers_bbox": (),
@@ -568,6 +577,21 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
         "footer_bbox": (),
         "explicit_vertical_lines": []
     }
+
+    # 1. Find the Textual Header Area including horizontal header lines (if any) and vertical lines that may define column boundaries
+    h_bbox = get_table_header_bbox(page, search_area_bbox, section, bank_name, padding=2.0)
+    if not h_bbox:
+        return None
+
+    # Use header union to define horizontal corridor; extend vertically using footer or search bounds
+    left_x, header_top, right_x, header_bottom = h_bbox
+    table_bottom = float(footer_bbox["text_bbox"]["bottom"]) + 5 if footer_bbox else float(search_area_bbox[3])
+
+    table_edges["headers_bbox"] = h_bbox
+    table_edges["coords"] = (left_x, right_x, header_top, table_bottom)
+    table_edges["rows_bbox"] = (left_x, header_bottom, right_x, table_bottom)
+    table_edges["footer_bbox"] = footer_bbox or ()
+
     return table_edges
 
 # @time_it
