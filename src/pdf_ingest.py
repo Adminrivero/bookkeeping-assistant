@@ -118,6 +118,7 @@ def validate_table_structure(table_rows: List[List[str | None]], section_config:
     Args:
         table_rows (list[list[str]]): Extracted table rows.
         section_config (dict): Section config from bank profile JSON.
+        
     Returns:
         bool: True if table matches expected structure and headers.
     """
@@ -551,13 +552,137 @@ def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=No
     return has_structure and has_headers
 
 
-def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: float = 2.0) -> Dict[str, Optional[Dict|list]]:
-    """Todo: Finds the bounding box of the table header by searching for header labels and associated horizontal lines."""
+def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: float = 2.0):
+    """
+    Locate and extract bounding boxes for table headers within a specified search area on a PDF page.
+    This function searches for header labels defined in the section configuration, using regex patterns
+    to handle OCR artifacts and flexible whitespace. It dynamically estimates the header zone and adjusts
+    based on the bank name for specialized handling (e.g., detecting horizontal lines for Triangle MasterCard
+    or enclosing rectangles for TD Visa). If matches are found, it computes a padded bounding box for the
+    headers and estimates vertical line breakpoints for column boundaries.
+    
+    Args:
+        page: The PDF page object to search on.
+        search_area_bbox (tuple): Bounding box (left, top, right, bottom) defining the search area.
+        section (dict): Configuration dictionary containing 'header_labels' list of strings to match.
+        bank_name (str): Name of the bank (e.g., "Triangle MasterCard", "TD Visa") to apply specific logic.
+        padding (float, optional): Padding value to expand the matched bounding box. Defaults to 2.0.
+        
+    Returns:
+        dict or None: A dictionary containing:
+            - "text_bbox": Bounding box of the matched header text after padding and clamping.
+            - "line_bbox": Bounding box of the horizontal line (if found for Triangle MasterCard).
+            - "vertical_lines_bp": List of x-coordinates for vertical line breakpoints (column boundaries).
+        Returns None if no header labels are provided, the search area is invalid, or no matches are found.
+        
+    Notes:
+        - For "Triangle MasterCard", it extracts horizontal lines to define the header zone and captures
+          vertical breakpoints if exactly 5 line segments are detected.
+        - For "TD Visa", it identifies large rectangles to adjust the header zone.
+        - Vertical breakpoints are estimated from matches if not captured from lines.
+    """
+    header_labels = section.get("header_labels", [])
+    if not header_labels:
+        return None
+
+    left, top, right, bottom = map(float, search_area_bbox)
+    if max(0.0, bottom - top) <= 0:
+        return None
+    
     header_bbox: Dict[str, Optional[dict|list]] = {
-        "labels_bbox": None,    # Bounding box encompassing all header labels found, used for vertical boundary estimation
-        "line_bbox": None,      # Bounding box of the horizontal line under the header, if any
-        "vertical_lines_bp": [] # List of breaking points where vertical lines intersect the header zone, used for column boundary estimation
+        "text_bbox": None,
+        "line_bbox": None,
+        "vertical_lines_bp": []
     }
+
+    # Dynamic header zone estimation
+    header_buffer = 40
+    header_bottom = min(bottom, top + header_buffer)
+    header_zone_bbox = (left, top, right, header_bottom)
+    
+    if bank_name == "Triangle MasterCard":
+        # For Triangle MC, look for top horizontal line to define the header zone
+        crop = page.crop(search_area_bbox)
+        horizontal_lines = _extract_horizontal_lines(crop, ascending=True)
+        if horizontal_lines:
+            # Assume the first horizontal line is the bottom boundary of the header zone
+            first_line = horizontal_lines[0]
+            header_zone_bbox = (left, top, right, first_line[0]["top"])
+            header_bbox["line_bbox"] = {
+                "x0": first_line[0]["x0"],
+                "top": first_line[0]["top"],
+                "x1": first_line[-1]["x1"],
+                "bottom": first_line[0]["bottom"]
+            }
+            # Store vertical line breakpoints if there are exactly 5 segments (indicating 4 columns)
+            if first_line and len(first_line) == 5:
+                header_bbox["vertical_lines_bp"] = [(seg["x1"] if i else seg["x0"]) for i, seg in enumerate(first_line)]
+        
+    elif bank_name == "TD Visa":
+        # For TD Visa, find rectangle that encloses the header labels and adjust the header zone accordingly
+        td_crop = page.crop(search_area_bbox)
+        # all_rects = [r for r in td_crop.rects if (r["x1"] - r["x0"]) > 1] 
+        td_rects = [r for r in td_crop.rects if (r["x1"] - r["x0"]) > 100 and (r["y1"] - r["y0"]) > 10]
+        if td_rects:
+            # Assume the top-most large rectangle is the header box
+            td_header_rect = min(td_rects, key=lambda r: r["top"])
+            header_zone_bbox = (
+                left,
+                td_header_rect["top"] - 2,  # small buffer above the rect
+                right,
+                td_header_rect["bottom"] + 2  # small buffer below the rect
+            )
+            
+    # if debug_mode:
+    #     debug_visualize_search_area(page, header_zone_bbox, action="save", filename=f"get_table_header_bbox-debug_header_zone.png")
+    
+    header_crop = page.crop(header_zone_bbox)
+    
+    matches = []
+    for label in header_labels:
+        pattern = _build_header_pattern(label)
+        found = header_crop.search(pattern)
+        if found:
+            matches.extend(found)
+            continue
+
+        # Fallback: search longest tokens to mitigate OCR noise
+        tokens = [t for t in re.split(r"\s+", label.strip()) if t]
+        tokens.sort(key=len, reverse=True)
+        for token in tokens:
+            token_matches = header_crop.search(re.compile(re.escape(token), re.IGNORECASE))
+            if token_matches:
+                matches.append(token_matches[0])
+                break
+
+    if not matches:
+        return None
+
+    x0 = min(m.get("x0", left) for m in matches)
+    x1 = max(m.get("x1", right) for m in matches)
+    t = min(m.get("top", top) for m in matches)
+    b = max(m.get("bottom", header_bottom) for m in matches)
+    # Apply gentle padding and clamp to search area
+    x0 = max(left, x0 - padding)
+    x1 = min(right, x1 + (padding + 1))
+    t = max(top, t - padding)
+    b = min(bottom, b + (padding + 2))
+    
+    # if debug_mode:
+    #     debug_visualize_search_area(page, (x0, t, x1, b), action="save", filename=f"get_table_header_bbox-debug_matched_headers.png")
+
+    header_bbox["text_bbox"] = {"x0": x0, "top": t, "x1": x1, "bottom": b}
+    
+    if not header_bbox["vertical_lines_bp"]:
+        # If vertical line breakpoints were not captured from the header line, estimate them based on the header labels positions.
+        if len(matches) == len(header_labels):
+            # If there is a match for every header label, use their x-coordinates to estimate column boundaries
+            sorted_matches = sorted(matches, key=lambda m: m["x0"])
+            header_bbox["vertical_lines_bp"] = [m["x0"] for m in sorted_matches]
+            header_bbox["vertical_lines_bp"][0] = min(sorted_matches[0]["x0"], left)  # Add the leftmost edge as the first breakpoint
+            header_bbox["vertical_lines_bp"][-1] = sorted_matches[-1]["x0"] - 10  # Expand last column width to capture long numbers that might extend beyond the last header label
+            header_bbox["vertical_lines_bp"].append(max(sorted_matches[-1]["x1"], right))  # Add the rightmost edge as the last breakpoint
+
     return header_bbox
 
 
