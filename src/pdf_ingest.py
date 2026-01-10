@@ -653,14 +653,15 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     if max(0.0, bottom - top) <= 0:
         return None
     
-    header_bbox: Dict[str, Optional[dict|list]] = {
+    header_bbox: Dict[str, Optional[tuple|dict|list]] = {
+        "coords": (),
         "text_bbox": None,
         "line_bbox": None,
         "vertical_lines_bp": []
     }
 
     # Dynamic header zone estimation
-    header_buffer = 40
+    header_buffer = 50
     header_bottom = min(bottom, top + header_buffer)
     header_zone_bbox = (left, top, right, header_bottom)
     
@@ -722,20 +723,23 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     if not matches:
         return None
 
-    x0 = min(m.get("x0", left) for m in matches)
-    x1 = max(m.get("x1", right) for m in matches)
+    # x0 = min(m.get("x0", left) for m in matches)
+    # x1 = max(m.get("x1", right) for m in matches)
     t = min(m.get("top", top) for m in matches)
     b = max(m.get("bottom", header_bottom) for m in matches)
     # Apply gentle padding and clamp to search area
-    x0 = max(left, x0 - padding)
-    x1 = min(right, x1 + (padding + 1))
+    # x0 = max(left, x0 - padding)
+    # x1 = min(right, x1 + (padding + 1))
     t = max(top, t - padding)
     b = min(bottom, b + (padding + 2))
     
     # if debug_mode:
     #     debug_visualize_search_area(page, (x0, t, x1, b), action="save", filename=f"get_table_header_bbox-debug_matched_headers.png")
 
-    header_bbox["text_bbox"] = {"x0": x0, "top": t, "x1": x1, "bottom": b}
+    header_bbox["text_bbox"] = {"x0": left, "top": t, "x1": right, "bottom": b}
+    line_bottom = header_bbox["line_bbox"] if header_bbox["line_bbox"] else None
+    line_bottom_y = line_bottom.get("bottom", 0) if isinstance(line_bottom, dict) else 0
+    header_bbox["coords"] = (left, t, right, max(b, header_zone_bbox[3], line_bottom_y))
     
     if not header_bbox["vertical_lines_bp"]:
         # If vertical line breakpoints were not captured from the header line, estimate them based on the header labels positions.
@@ -756,14 +760,16 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
     """
     # Debug section: visualize search area
     if debug_mode:
-        debug_visualize_search_area(page, search_area_bbox, action="save")
+        debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_edges-debug_search_area.png")
+        # test_area_bbox = (0, 0, page.width, search_area_bbox[1])
+        # debug_visualize_search_area(page, test_area_bbox, action="save", filename=f"get_table_edges-debug_test_area.png")
     # End debug section
 
     table_edges = {
         "coords": (),
-        "headers_bbox": (),
-        "rows_bbox": (),
-        "footer_bbox": (),
+        "headers_bbox": None,
+        "rows_bbox": None,
+        "footer_bbox": None,
         "explicit_vertical_lines": []
     }
 
@@ -779,7 +785,8 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
     table_edges["headers_bbox"] = h_bbox
     table_edges["coords"] = (left_x, right_x, header_top, table_bottom)
     table_edges["rows_bbox"] = (left_x, header_bottom, right_x, table_bottom)
-    table_edges["footer_bbox"] = footer_bbox or ()
+    table_edges["footer_bbox"] = footer_bbox or None
+    table_edges["explicit_vertical_lines"] = h_bbox.get("vertical_lines_bp", [])
 
     return table_edges
 
