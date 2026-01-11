@@ -795,14 +795,46 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
     h_bbox = get_table_header_bbox(page, search_area_bbox, section, bank_name, padding=2.0)
     if not h_bbox:
         return None
-
-    # Use header union to define horizontal corridor; extend vertically using footer or search bounds
-    left_x, header_top, right_x, header_bottom = h_bbox
-    table_bottom = float(footer_bbox["text_bbox"]["bottom"]) + 5 if footer_bbox else float(search_area_bbox[3])
+    
+    header_coords = h_bbox.get("coords", search_area_bbox)
+    if not isinstance(header_coords, (tuple, list)):
+        header_coords = search_area_bbox # Fallback to search area coords
+    header_left, header_top, header_right, header_bottom = map(float, header_coords)
+    
+    # Determine table horizontal edges: the leftmost and rightmost x-coordinates from available lines, or fallback to header coords
+    table_left = float('inf')
+    table_right = float('-inf')
+    if h_bbox.get("line_bbox"):
+        line_bbox = h_bbox["line_bbox"]
+        if not isinstance(line_bbox, dict):
+            line_bbox = {}
+        table_left = min(table_left, line_bbox.get("x0", float('inf')))
+        table_right = max(table_right, line_bbox.get("x1", float('-inf')))
+    if footer_bbox and footer_bbox.get("line_bbox"):
+        table_left = min(table_left, footer_bbox["line_bbox"]["x0"])
+        table_right = max(table_right, footer_bbox["line_bbox"]["x1"])
+    if table_left == float('inf'):
+        table_left = header_left
+    if table_right == float('-inf'):
+        table_right = header_right
+    
+    # Set table top edge
+    table_top = float(header_top)
+    # Set table_header_bottom to the header bottom coordinate
+    table_header_bottom = float(header_bottom)
+    
+    # Set table_footer_top to the footer line top if footer line exist, otherwise use the footer text top if footer text exist, otherwise use the search area bottom
+    # table_footer_top = float(footer_bbox["line_bbox"]["top"]) if footer_bbox and footer_bbox["line_bbox"] else (float(footer_bbox["text_bbox"]["top"]) if footer_bbox and footer_bbox["text_bbox"] else float(search_area_bbox[3]))
+    table_footer_top = search_area_bbox[3]  # Default to search area bottom
+    if footer_bbox:
+        if footer_bbox.get("line_bbox"):
+            table_footer_top = footer_bbox["line_bbox"]["top"]
+        elif footer_bbox.get("text_bbox"):
+            table_footer_top = footer_bbox["text_bbox"]["top"]
 
     table_edges["headers_bbox"] = h_bbox
-    table_edges["coords"] = (left_x, right_x, header_top, table_bottom)
-    table_edges["rows_bbox"] = (left_x, header_bottom, right_x, table_bottom)
+    table_edges["coords"] = (table_left, table_right, table_top, table_footer_top)
+    table_edges["rows_bbox"] = (table_left, table_header_bottom, table_right, table_footer_top)
     table_edges["footer_bbox"] = footer_bbox or None
     table_edges["explicit_vertical_lines"] = h_bbox.get("vertical_lines_bp", [])
 
