@@ -833,7 +833,7 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
             table_footer_top = footer_bbox["text_bbox"]["top"]
 
     table_edges["headers_bbox"] = h_bbox
-    table_edges["coords"] = (table_left, table_right, table_top, table_footer_top)
+    table_edges["coords"] = (table_left, table_top, table_right, table_footer_top)
     table_edges["rows_bbox"] = (table_left, table_header_bottom, table_right, table_footer_top)
     table_edges["footer_bbox"] = footer_bbox or None
     table_edges["explicit_vertical_lines"] = h_bbox.get("vertical_lines_bp", [])
