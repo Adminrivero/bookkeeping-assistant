@@ -660,7 +660,7 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
         "vertical_lines_bp": []
     }
 
-    # Dynamic header zone estimation
+    # Dynamic Header Zone Estimation
     header_buffer = 50
     header_bottom = min(bottom, top + header_buffer)
     header_zone_bbox = (left, top, right, header_bottom)
@@ -693,63 +693,36 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
             td_header_rect = min(td_rects, key=lambda r: r["top"])
             header_zone_bbox = (
                 left,
-                td_header_rect["top"] - 2,  # small buffer above the rect
+                td_header_rect["top"] - padding,  # small buffer above the rect
                 right,
-                td_header_rect["bottom"] + 2  # small buffer below the rect
+                td_header_rect["bottom"] + padding  # small buffer below the rect
             )
-            
-    # if debug_mode:
-    #     debug_visualize_search_area(page, header_zone_bbox, action="save", filename=f"get_table_header_bbox-debug_header_zone.png")
     
     header_crop = page.crop(header_zone_bbox)
     
-    matches = []
+    # Vertical Boundaries Refinement (top, bottom)
+    vertical_boundary: dict[str, float] = {"top": float("inf"), "bottom": float("-inf")}
     for label in header_labels:
         pattern = _build_header_pattern(label)
-        found = header_crop.search(pattern)
-        if found:
-            matches.extend(found)
-            continue
+        matches = header_crop.search(pattern)
+        for m in matches:
+            vertical_boundary["top"] = min(vertical_boundary["top"], float(m.get("top", float("inf"))))
+            vertical_boundary["bottom"] = max(vertical_boundary["bottom"], float(m.get("bottom", float("-inf"))))
 
-        # Fallback: search longest tokens to mitigate OCR noise
-        tokens = [t for t in re.split(r"\s+", label.strip()) if t]
-        tokens.sort(key=len, reverse=True)
-        for token in tokens:
-            token_matches = header_crop.search(re.compile(re.escape(token), re.IGNORECASE))
-            if token_matches:
-                matches.append(token_matches[0])
-                break
-
-    if not matches:
-        return None
-
-    # x0 = min(m.get("x0", left) for m in matches)
-    # x1 = max(m.get("x1", right) for m in matches)
-    t = min(m.get("top", top) for m in matches)
-    b = max(m.get("bottom", header_bottom) for m in matches)
-    # Apply gentle padding and clamp to search area
-    # x0 = max(left, x0 - padding)
-    # x1 = min(right, x1 + (padding + 1))
-    t = max(top, t - padding)
-    b = min(bottom, b + (padding + 2))
-    
-    # if debug_mode:
-    #     debug_visualize_search_area(page, (x0, t, x1, b), action="save", filename=f"get_table_header_bbox-debug_matched_headers.png")
+    t = max(top, vertical_boundary["top"] - padding) if vertical_boundary["top"] < float("inf") else top
+    b = min(bottom, vertical_boundary["bottom"] + padding) if vertical_boundary["bottom"] > float("-inf") else bottom
 
     header_bbox["text_bbox"] = {"x0": left, "top": t, "x1": right, "bottom": b}
     line_bottom = header_bbox["line_bbox"] if header_bbox["line_bbox"] else None
     line_bottom_y = line_bottom.get("bottom", 0) if isinstance(line_bottom, dict) else 0
-    header_bbox["coords"] = (left, t, right, max(b, header_zone_bbox[3], line_bottom_y))
+    header_bbox["coords"] = (left, t, right, max(b, line_bottom_y))
+    
+    if debug_mode:
+        debug_visualize_search_area(page, header_bbox["coords"], action="save", filename=f"get_table_header_bbox-debug_final_header_outter_bbox.png")
     
     if not header_bbox["vertical_lines_bp"]:
-        # If vertical line breakpoints were not captured from the header line, estimate them based on the header labels positions.
-        if len(matches) == len(header_labels):
-            # If there is a match for every header label, use their x-coordinates to estimate column boundaries
-            sorted_matches = sorted(matches, key=lambda m: m["x0"])
-            header_bbox["vertical_lines_bp"] = [m["x0"] for m in sorted_matches]
-            header_bbox["vertical_lines_bp"][0] = min(sorted_matches[0]["x0"], left)  # Add the leftmost edge as the first breakpoint
-            header_bbox["vertical_lines_bp"][-1] = sorted_matches[-1]["x0"] - 10  # Expand last column width to capture long numbers that might extend beyond the last header label
-            header_bbox["vertical_lines_bp"].append(max(sorted_matches[-1]["x1"], right))  # Add the rightmost edge as the last breakpoint
+        # Fallback: Word-Aware Refinement for Horizontal Breakpoints
+        matches = []
 
     return header_bbox
 
