@@ -653,7 +653,7 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     if max(0.0, bottom - top) <= 0:
         return None
     
-    header_bbox: Dict[str, Optional[tuple|dict|list]] = {
+    header_bbox: Dict[str, Optional[dict] | tuple | list] = {
         "coords": (),
         "text_bbox": None,
         "line_bbox": None,
@@ -722,8 +722,53 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     
     if not header_bbox["vertical_lines_bp"]:
         # Fallback: Word-Aware Refinement for Horizontal Breakpoints
+        header_text_crop = page.crop(tuple(header_bbox["text_bbox"].values()))
+        # Extract all individual word objects in the header zone
+        all_words = header_text_crop.extract_words()
+        
         matches = []
+        current_cursor_x0 = left    # Start searching from the left edge
+        for label in header_labels:
+            # Clean the label and get the first word as an anchor for matching
+            clean_label = label.strip().upper()
+            first_token = clean_label.split()[0] if clean_label else ""
+            
+            found_word = None
+            for word in all_words:
+                word_text = word.get("text", "").strip().upper()
+                if first_token in word_text and word["x0"] >= (current_cursor_x0 - 1):
+                    found_word = word
+                    break
+            
+            if found_word:
+                matches.append(found_word)
+                # Move cursor to the end of the found word for next search
+                current_cursor_x0 = found_word["x1"]
+            else:
+                # Fallback: If literal match fails, try fuzzy pattern
+                segment_crop = header_crop.crop((current_cursor_x0, header_bbox["text_bbox"]["top"], right, header_bbox["text_bbox"]["bottom"]))
+                pattern = _build_header_pattern(label)
+                seg_matches = segment_crop.search(pattern)
+                if seg_matches:
+                    matches.append(seg_matches[0])
+                    current_cursor_x0 = seg_matches[0]["x1"]
+        
+        if len(matches) == len(header_labels):
+            sorted_matches = sorted(matches, key=lambda m: m["x0"])
+            # Use x0 for the breakpoints
+            header_bbox["vertical_lines_bp"] = [m["x0"] for m in sorted_matches]
+            # Apply overrides
+            header_bbox["vertical_lines_bp"][0] = min(sorted_matches[0]["x0"], left)
+            # Shift last column start left by 80% of the header label width
+            header_bbox["vertical_lines_bp"][-1] = sorted_matches[-1]["x0"] - round(sorted_matches[-1].get("width", 0) * 0.8, 2)
+            # Add the final edge
+            header_bbox["vertical_lines_bp"].append(max(sorted_matches[-1]["x1"], right))
+            
+            if debug_mode:
+                debug_visualize_column_zones(page, header_bbox["coords"], header_bbox["vertical_lines_bp"], action="save", filename=f"get_table_header_bbox-debug_column_zones-{bank_name}.png")
 
+    if not header_bbox["text_bbox"] and not header_bbox["line_bbox"] and not header_bbox["vertical_lines_bp"]:
+        return None
     return header_bbox
 
 
