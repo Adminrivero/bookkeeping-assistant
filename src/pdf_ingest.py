@@ -64,101 +64,6 @@ def normalize_filename(pdf_path: pathlib.Path, bank: str):
     return pdf_path
 
 
-def parse_section(table, section_config, source):
-    """
-    Parse a transaction table using bank profile config.
-
-    Args:
-        table (list[list[str]]): Extracted table rows.
-        section_config (dict): Section config from bank profile JSON.
-        source (str): Source identifier.
-
-    Returns:
-        list[dict]: Normalized transaction dictionaries.
-    """
-    transactions = []
-    if not table or len(table) < 2:
-        notify("Empty or malformed table in section %s" % section_config["section_name"], "warning")
-        return transactions
-
-    cols = section_config["columns"]
-    for row in table[1:]:
-        # Skip footer rows if flagged
-        if section_config.get("skip_footer_rows", False) and any("total" in cell.lower() for cell in row if cell):
-            continue
-        
-        tx = {
-            "source": source,
-            "section": section_config["section_name"]
-        }
-        
-        try:
-            for field, idx in cols.items():
-                if idx < len(row):
-                    value = row[idx].strip()
-                    # Convert amount to float if field is "amount"
-                    if field == "amount":
-                        value = value.replace(",", "").replace("$", "").strip()
-                        tx[field] = float(value) if value else 0.0
-                    else:
-                        tx[field] = value
-            transactions.append(tx)
-        except Exception as e:
-            notify("Skipping malformed row in %s: %s | Error: %s" % (section_config["section_name"], row, e), "warning")
-            
-    notify("Parsed %d transactions from section %s" % (len(transactions), section_config["section_name"]), "info")
-    return transactions
-
-
-def validate_table_structure(table_rows: List[List[str | None]], section_config: Dict) -> bool:
-    """
-    Checks if a raw table matches the column structure AND header content
-    defined in the config. Returns True if the table is a valid target.
-    
-    Args:
-        table_rows (list[list[str]]): Extracted table rows.
-        section_config (dict): Section config from bank profile JSON.
-        
-    Returns:
-        bool: True if table matches expected structure and headers.
-    """
-    if not table_rows or len(table_rows) < 1:
-        return False
-
-    expected_labels = section_config.get("header_labels", [])
-    expected_col_count = len(section_config["columns"])
-
-    # --- CHECK 1: Column Count ---
-    # Check the first row (the header)
-    first_row = table_rows[0]
-    
-    # Clean the row to handle empty cells created by pdfplumber's heuristics
-    clean_row = [str(c).strip() for c in first_row if c is not None and str(c).strip() != ""]
-    
-    if len(clean_row) < expected_col_count:
-        # Fails if it doesn't have enough data columns
-        return False
-    
-    if not expected_labels:
-        # If no expected labels, assume structure check is sufficient (skip header check)
-        return True
-
-    # --- CHECK 2: Header Content (Semantic Validation) ---
-    # Check if all required header labels are present in the first row.
-    # Look for the labels in the *raw, full* first_row, cleaning them up for comparison.
-    
-    # 1. Prepare the extracted header for comparison
-    header_str = " | ".join([str(c).replace("\n", " ").strip() for c in first_row if c is not None]).lower()
-    
-    # 2. Check for all expected labels
-    for label in expected_labels:
-        if label.lower() not in header_str:
-            return False
-
-    # If both checks pass, high confidence this is a transaction table
-    return True
-
-
 def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename: Optional[str] = None):
     """
     Visualize a cropped area of a PDF page by drawing a red rectangle.
@@ -1051,11 +956,6 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                 if header_anchor:
                     try:
                         header_area = page.crop((0, 0, page.width, page.height * 0.15))
-                        # Debug section: visualize search area
-                        # debug_visualize_search_area(page, (0, 0, page.width, page.height * 0.15), action="save")
-                        # text = header_area.extract_text() or ""
-                        # found = header_anchor in text
-                        # End debug section
                         pattern = r'\s+'.join(re.escape(word) for word in header_anchor.split())
                         anchors = header_area.search(pattern, flags=re.IGNORECASE)
                         if not anchors:
@@ -1130,25 +1030,26 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     if not validate_table_presence(page, strip_bbox, section, source_name, footer_bbox=footer_bbox):
                         continue
                     
-                    # Gate 2: Get precise coordinates based on text anchors and lines
+                    # Gate 2: Get precise table bounds based on text anchors and lines
                     table_edges = get_table_edges(page, strip_bbox, section, source_name, footer_bbox=footer_bbox)
                     
-                    if table_edges and "coords" in table_edges:
-                        left_x, right_x, top_y, bottom_y = table_edges["coords"]
-                        # Keep within page bounds
-                        left_x = max(0.0, float(left_x))
-                        right_x = min(float(page.width), float(right_x))
-                        top_y = max(0.0, float(top_y))
-                        bottom_y = min(float(page.height), float(bottom_y))
+                    if table_edges and table_edges.get("coords"):
+                        left_x, top_y, right_x, bottom_y = table_edges["coords"]
+                        # Use the refined row_bbox for data extraction (if available)
+                        rows_bbox = table_edges.get("rows_bbox", None)
                     else:
-                        # Fallback: reasonable corridor from left margin to page width
-                        left_x, right_x, top_y, bottom_y = (max(0.0, float(item["left"]) - 1.0), float(page.width), start_y, end_y)
+                        # Fallback: reasonable corridor based on section header and footer (if any)
+                        left_x, top_y, right_x, bottom_y = (max(0.0, float(item["left"]) - 1.0), start_y, min(float(page.width), strip_bbox[2]), end_y)
+                        rows_bbox = None
 
                     # Guard: invalid crop
-                    if right_x <= left_x + 2 or bottom_y <= top_y + 2:
+                    min_w_threshold, min_h_threshold = 50.0, 10.0
+                    if rows_bbox and (rows_bbox[2] - rows_bbox[0] < min_w_threshold or rows_bbox[3] - rows_bbox[1] < min_h_threshold):
+                        continue
+                    if right_x - left_x < min_w_threshold or bottom_y - top_y < min_h_threshold:
                         continue
 
-                    crop_box = (left_x, top_y, right_x, bottom_y)
+                    crop_box = rows_bbox or (left_x, top_y, right_x, bottom_y)
                     try:
                         cropped_page = page.crop(crop_box)
                     except Exception:
@@ -1179,19 +1080,22 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                                 extracted = [t for t in extracted if t]
                                 if extracted:
                                     table_rows = max(extracted, key=lambda t: len(t))
+                            elif rows_bbox:
+                                cropped_page = page.crop((left_x, top_y, right_x, bottom_y))
+                                table_rows = cropped_page.extract_table(table_settings=effective_table_settings)
                         except Exception:
                             table_rows = None
 
                     if not table_rows:
                         continue
 
-                    # --- Validate target table structure/headers before parsing ---
-                    if not validate_table_structure(table_rows, section):
-                        continue
+                    # --- Post-extraction structure validation (mode depends on crop) ---
+                    # if not valid_extracted_table(..):
+                    #     continue
 
-                    # --- Parse & normalize ---
+                    # --- Parse & normalize rows ---
                     try:
-                        new_txs = parse_section(table_rows, section, source_name)
+                        new_txs = []
                     except Exception as e:
                         notify(
                             "Failed parsing section %s in %s (page %d): %s"
