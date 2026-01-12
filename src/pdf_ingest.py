@@ -831,7 +831,7 @@ def validate_extracted_table(table_rows: List[List[str | None]], section_config:
 
 
 # @time_it
-def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
+def debug_parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None):
     profile = load_bank_profile(bank)
     bank_name = profile.get("bank_name", bank)
     table_settings = profile.get("table_settings", {})
@@ -986,7 +986,7 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
     return all_data
 
 
-def parse_pdf(pdf_path: pathlib.Path, bank: str):
+def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None):
     """
     Extract transactions from a PDF using bank profile config.
 
@@ -1184,7 +1184,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
 
                     # --- Parse & normalize rows ---
                     try:
-                        new_txs = []
+                        new_txs = [] #Todo: Implemnt a robust parsing logic that can handle common anomalies
                     except Exception as e:
                         notify(
                             "Failed parsing section %s in %s (page %d): %s"
@@ -1268,10 +1268,11 @@ def ingest_year(year: str, bank: str = "triangle"):
     """
     pdfs = discover_pdfs(f"./data/{year}/")
     all_tx = []
+    tax_year = int(year)
     
     for pdf in pdfs:
         normalized_pdf = normalize_filename(pdf, bank)
-        tx = parse_pdf(normalized_pdf, bank)
+        tx = parse_pdf(normalized_pdf, bank, tax_year=tax_year)
         export_csv(tx, pathlib.Path(f"./output/{year}/{bank}/{normalized_pdf.stem}.csv"))
         all_tx.extend(tx)
         

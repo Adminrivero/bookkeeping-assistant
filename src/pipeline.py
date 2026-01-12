@@ -9,8 +9,9 @@ Defines the orchestration pipeline for bookkeeping automation:
 3. Map to spreadsheet schema
 4. Export to Excel workbook
 """
-
+import pathlib
 from tqdm import tqdm
+from typing import Optional
 from src.rules import RuleLoader
 from src.classify import TransactionClassifier
 from src.mapping import map_transaction_to_row
@@ -18,9 +19,9 @@ from src.export import SpreadsheetExporter
 from src.utils import notify, load_bank_profile
 from src import pdf_ingest, csv_ingest
 from src import ingest as ingest_module
-import pathlib
 
-def ingest_statement(file_path, bank: str):
+
+def ingest_statement(file_path, bank: str, tax_year: Optional[int] = None):
     """
     Ingest a statement file (CSV or PDF) and normalize to unified transactions.
     """
