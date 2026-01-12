@@ -62,7 +62,7 @@ def main():
     transactions = []
     for file_path, bank in file_list:
         try:
-            txs = ingest_statement(file_path, bank)
+            txs = ingest_statement(file_path, bank, tax_year=args.year)
             transactions.extend(txs)
             notify(f"    ✅ Ingested {len(txs)} from {file_path}", level="info")
         except Exception as e:
