@@ -24,7 +24,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "footer_row_text": "Total payments received",
       "skip_footer_rows": true
     },
@@ -37,7 +37,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "footer_row_text": "Total returns and credits",
       "skip_footer_rows": true
     },
@@ -50,7 +50,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "footer_row_text": "Total purchases",
       "skip_footer_rows": true
     },
@@ -63,7 +63,7 @@
         "description": 2,
         "amount": 3
       },
-      "header_labels": ["TRANSACTION DATE", "POSTING DATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "footer_row_text": "Total interest charges",
       "skip_footer_rows": true
     }

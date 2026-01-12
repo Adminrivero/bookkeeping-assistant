@@ -1,6 +1,18 @@
 {
   "bank_name": "TD Visa",
   "page_header_anchor": "TD EMERALD FLEX RATE CARD",
+  "table_settings": {
+    "vertical_strategy": "explicit",
+    "explicit_vertical_lines": [],
+    "horizontal_strategy": "text",
+    "text_x_tolerance": 25,
+    "text_y_tolerance": 4,
+    "min_words_vertical": 1,
+    "min_words_horizontal": 1,
+    "intersection_tolerance": 15,
+    "snap_tolerance": 5,
+    "join_tolerance": 5
+  },
   "sections": [
     {
       "section_name": "Transactions",
@@ -11,6 +23,7 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "ACTIVITY DESCRIPTION", "AMOUNT($)"],
       "footer_row_text": "TOTAL NEW BALANCE",
       "skip_footer_rows": true
     }
