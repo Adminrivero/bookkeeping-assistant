@@ -11,7 +11,7 @@ import pdfplumber
 import time
 import tempfile
 import webbrowser, pathlib
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal
 from datetime import datetime
 from src.utils import load_bank_profile, notify, debug_mode, time_it
 from collections import defaultdict
@@ -745,6 +745,98 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
 
     return table_edges
 
+
+def validate_extracted_table(table_rows: List[List[str | None]], section_config: Dict, *, type_check: Literal["rows_only", "header_only", "both"] = "both", max_header_rows: int = 2, header_match_threshold: float = 0.6) -> bool:
+    """
+    Post-extraction validation (fast, rows-only/content-based) for extracted tables.
+
+    Modes:
+      1) type_check="rows_only"  -> validates that the extracted data "looks like rows" (no header required).
+      2) type_check="header_only" -> validates header presence (supports 1-2 header rows) + basic structure.
+      3) type_check="both" -> validates both rows and header (if header_labels are defined in section_config).
+
+    This validator:
+      - Verifies row/column shape (when applicable)
+      - Validates header labels fuzzy-match (when applicable)
+
+    Args:
+        table_rows: Extracted table rows (list of rows, each row list of cells).
+        section_config: Section config from bank profile JSON.
+        type_check: Validation mode ("rows_only", "header_only", or "both").
+        max_header_rows: When type_check includes header validation, number of leading rows to consider as header (1 or 2).
+        header_match_threshold: Fraction of expected header labels that must be found in the header text.
+
+    Returns:
+        bool: True if the extracted table is plausible for this section; otherwise False.
+    """
+    if not table_rows or not isinstance(table_rows, list):
+        return False
+
+    expected_cols = section_config.get("columns", {})
+    if not isinstance(expected_cols, dict) or not expected_cols:
+        return False
+
+    expected_col_count = len(expected_cols)
+    if expected_col_count <= 0:
+        return False
+
+    # ---- Helpers ----
+    def _clean_cell(v: object) -> str:
+        if v is None:
+            return ""
+        s = str(v).replace("\n", " ").strip()
+        return s
+
+    def _nonempty_cells(row: List[str | None]) -> List[str]:
+        return [c for c in (_clean_cell(x) for x in row) if c]
+
+    # --- Rows-only or Both: structural validation (row/column shape) is required ---
+    if type_check in ("rows_only", "both"):
+        # ---- Basic structural sanity: enough columns in (most) rows ----
+        good_rows = 0
+        rows_to_check = table_rows[: min(len(table_rows), 25)]  # cap work for performance
+        for row in rows_to_check:
+            if not isinstance(row, list):
+                continue
+            # Count non-empty cells; rows can include blanks depending on strategy
+            nonempty = _nonempty_cells(row)
+            if len(nonempty) >= expected_col_count:
+                good_rows += 1
+
+        # Require at least 1 good row, and a modest ratio if we have multiple rows.
+        if good_rows == 0:
+            return False
+        if len(rows_to_check) >= 5 and (good_rows / len(rows_to_check)) < 0.4:
+            return False
+
+    # ---- Header validation (optional) ----
+    if type_check in ("header_only", "both"):
+        expected_labels = section_config.get("header_labels", []) or []
+        if not expected_labels:
+            return False
+        
+        # Build header text from the first 1-2 rows and check label presence
+        header_n = max(1, min(int(max_header_rows), 2))
+        header_slice = table_rows[: min(len(table_rows), header_n)]
+        header_text = " | ".join(
+            " ".join(_nonempty_cells(r)).lower() for r in header_slice if isinstance(r, list)
+        )
+
+        # Count label hits (substring-based; robust regex matching happens earlier in validate_table_presence)
+        hits = 0
+        for label in expected_labels:
+            lab = _clean_cell(label).lower()
+            if lab and lab in header_text:
+                hits += 1
+
+        # Allow multi-row headers by using a percentage threshold rather than requiring all labels.
+        required = max(1, int(len(expected_labels) * float(header_match_threshold)))
+        if hits < required:
+            return False
+
+    return True
+
+
 # @time_it
 def debug_parse_pdf(pdf_path: pathlib.Path, bank: str):
     profile = load_bank_profile(bank)
@@ -1049,6 +1141,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                     if right_x - left_x < min_w_threshold or bottom_y - top_y < min_h_threshold:
                         continue
 
+                    # Create crop box for table extraction: prefer rows_bbox if available, otherwise use the broader header/footer-based bounds
                     crop_box = rows_bbox or (left_x, top_y, right_x, bottom_y)
                     try:
                         cropped_page = page.crop(crop_box)
@@ -1086,12 +1179,16 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str):
                         except Exception:
                             table_rows = None
 
+                    # Guard: no table extracted
                     if not table_rows:
                         continue
 
-                    # --- Post-extraction structure validation (mode depends on crop) ---
-                    # if not valid_extracted_table(..):
-                    #     continue
+                    # --- Post-extraction table validation, if needed (when rows_bbox is None) ---
+                    if not rows_bbox:
+                        # Force (header_only) table structure validation (rows validation becomes redundant sice it happens later in parsing)
+                        type_check = "header_only"
+                        if not validate_extracted_table(table_rows, section, type_check=type_check, max_header_rows=2, header_match_threshold=0.6):
+                            continue
 
                     # --- Parse & normalize rows ---
                     try:
