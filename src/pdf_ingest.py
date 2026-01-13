@@ -264,6 +264,7 @@ def _extract_horizontal_lines(cropped_search_area, ascending=True, consolidate_s
     normalized = sorted([_normalize_segment(s) for s in combined_segments], key=lambda s: s["top"], reverse=not ascending)
     return [[seg] for seg in normalized]
 
+
 # @time_it
 def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
     """Find the leftmost x0 coordinate of text in the top portion of the page.
@@ -830,6 +831,279 @@ def validate_extracted_table(table_rows: List[List[str | None]], section_config:
     return True
 
 
+def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source: str, tax_year: str, *, rows_only: bool = True, max_header_rows: int = 2,) -> List[Dict]:
+    """
+    Parse extracted PDF table rows into normalized transaction dicts.
+
+    This function is designed to be resilient to common PDF table extraction anomalies:
+      - Header rows included/excluded depending on extraction strategy
+      - Multi-line descriptions (continuation rows)
+      - Noise/total/footer rows
+      - Amount formats: $1,234.56, (123.45), 123.45 CR/DR, unicode minus
+
+    Args:
+        table_rows: Raw extracted rows (list of rows, each row list of cells)
+        section_config: Section config from bank profile JSON (must include "columns")
+        source: Bank/source name (e.g., "TD Visa", "CIBC", "Triangle MasterCard")
+        tax_year: Tax year string (e.g., "2025") used to resolve partial dates (no year in statement rows)
+        rows_only: If True, assume table_rows contain only data rows; if False, drop up to max_header_rows
+        max_header_rows: Number of leading rows to drop when rows_only=False
+
+    Returns:
+        List[Dict]: Normalized transactions with keys:
+            transaction_date (YYYY-MM-DD), posting_date (YYYY-MM-DD or None),
+            description, amount (float), source, section
+    """
+    if not table_rows:
+        return []
+
+    section_name = section_config.get("section_name") or section_config.get("name") or "Transactions"
+
+    cols = section_config.get("columns") or {}
+    tx_date_idx = cols.get("transaction_date")
+    post_date_idx = cols.get("posting_date")
+    desc_idx = cols.get("description")
+    amt_idx = cols.get("amount")
+
+    # Minimum required to produce a transaction
+    if desc_idx is None or amt_idx is None:
+        return []
+
+    # ---- Pre-clean once (performance + consistent downstream logic) ----
+    clean_rows: List[List[str]] = []
+    for r in table_rows:
+        if not r or not any(r):
+            continue
+        clean_rows.append([str(c).replace("\n", " ").strip() if c is not None else "" for c in r])
+
+    if not clean_rows:
+        return []
+
+    # Skip headers if caller says header rows are present
+    if not rows_only:
+        drop_n = min(max(0, int(max_header_rows)), len(clean_rows))
+        clean_rows = clean_rows[drop_n:]
+
+    if not clean_rows:
+        return []
+
+    year_int = int(tax_year)
+
+    def _cell(row: List[str], idx: Optional[int]) -> str:
+        if idx is None:
+            return ""
+        return row[idx] if 0 <= idx < len(row) else ""
+
+    _AMT_TOKEN = re.compile(r"-?\d+(?:\.\d+)?")
+
+    def _parse_amount(s: str) -> Optional[float]:
+        """
+        Parse an amount cell into float.
+        Supports:
+          - "$1,234.56"
+          - "(123.45)" -> -123.45
+          - "123.45 CR" -> -123.45 (credit reduces balance / payment)
+          - "123.45 DR" ->  123.45
+          - unicode minus "−"
+        Returns None if no numeric token found.
+        """
+        if not s:
+            return None
+
+        s_upper = (
+            s.upper()
+            .replace("$", "")
+            .replace(",", "")
+            .replace("−", "-")
+            .strip()
+        )
+
+        is_credit = "CR" in s_upper
+        s_clean = s_upper.replace("CR", "").replace("DR", "").strip()
+
+        if s_clean.startswith("(") and s_clean.endswith(")"):
+            inner = s_clean[1:-1].strip()
+            m = _AMT_TOKEN.search(inner)
+            if not m:
+                return None
+            try:
+                return -abs(float(m.group(0)))
+            except ValueError:
+                return None
+
+        m = _AMT_TOKEN.search(s_clean)
+        if not m:
+            return None
+        try:
+            val = float(m.group(0))
+        except ValueError:
+            return None
+
+        if is_credit:
+            return -abs(val)
+        return val
+
+    def _looks_like_date(s: str) -> bool:
+        s = (s or "").upper().strip()
+        if not s:
+            return False
+        patterns = [
+            r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b",
+            r"\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s+\d{1,2}\b",
+        ]
+        return any(re.search(p, s) for p in patterns)
+
+    def _is_total_or_noise_row(row: List[str]) -> bool:
+        """
+        Reject obvious totals/footers/noise.
+        Keep this conservative: only skip when highly likely non-transaction.
+        """
+        joined = " ".join(c for c in row if c).strip().upper()
+        if not joined:
+            return True
+
+        # Common statement footers/totals
+        noise_markers = (
+            "TOTAL",
+            "TOTALS",
+            "SUBTOTAL",
+            "NEW BALANCE",
+            "PREVIOUS STATEMENT BALANCE",
+            "STATEMENT BALANCE",
+            "BALANCE FORWARD",
+            "TOTAL INTEREST",
+            "TOTAL PAYMENTS",
+            "TOTAL CREDITS",
+            "TOTAL CHARGES",
+            "TOTAL FEES",
+            "ACCOUNT NUMBER",
+            "PAGE ",
+        )
+        if any(m in joined for m in noise_markers):
+            # Avoid false positives: "TOTAL" inside merchant names is rare; still treat as noise
+            return True
+
+        # Very short single-cell fragments are usually OCR artifacts
+        nonempty = [c for c in row if c and c.strip()]
+        if len(nonempty) == 1 and len(nonempty[0]) <= 2:
+            return True
+
+        return False
+
+    def _is_desc_only_continuation(row: List[str]) -> bool:
+        """
+        Continuation row heuristic: has description text but lacks amount and date-like tokens.
+        """
+        desc = _cell(row, desc_idx)
+        amt = _parse_amount(_cell(row, amt_idx))
+
+        tx_raw = _cell(row, tx_date_idx)
+        post_raw = _cell(row, post_date_idx)
+
+        has_any_date = _looks_like_date(tx_raw) or _looks_like_date(post_raw)
+        has_desc = bool(desc and desc.strip())
+        has_amount = amt is not None
+
+        return has_desc and (not has_amount) and (not has_any_date)
+
+    def _parse_date(raw: str, *, default_year: int) -> Optional[str]:
+        """
+        Convert a raw date token to ISO YYYY-MM-DD.
+        Supports:
+          - 12/31, 12/31/2024, 12/31/24
+          - DEC 31, DEC. 31
+        Uses default_year when year is missing.
+        """
+        s = (raw or "").strip().upper()
+        if not s:
+            return None
+
+        # Numeric date: M/D[/YY|YYYY]
+        m = re.search(r"\b(?P<m>\d{1,2})/(?P<d>\d{1,2})(?:/(?P<y>\d{2,4}))?\b", s)
+        if m:
+            mm = int(m.group("m"))
+            dd = int(m.group("d"))
+            yy = m.group("y")
+            if yy:
+                y = int(yy)
+                if y < 100:
+                    # Interpret 2-digit year as 20xx (reasonable for modern statements)
+                    y += 2000
+            else:
+                y = default_year
+            try:
+                return datetime(y, mm, dd).strftime("%Y-%m-%d")
+            except ValueError:
+                return None
+
+        # Alpha date: "DEC 31" or "DEC. 31"
+        m = re.search(r"\b(?P<mon>JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s+(?P<d>\d{1,2})\b", s)
+        if m:
+            mon_map = {
+                "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+                "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12
+            }
+            mm = mon_map.get(m.group("mon"), 0)
+            dd = int(m.group("d"))
+            if mm <= 0:
+                return None
+            try:
+                return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
+            except ValueError:
+                return None
+
+        return None
+
+    out: List[Dict] = []
+    last_tx: Optional[Dict] = None
+
+    for row in clean_rows:
+        if _is_total_or_noise_row(row):
+            continue
+
+        # Continuation rows (multi-line descriptions)
+        if _is_desc_only_continuation(row):
+            if last_tx:
+                extra = _cell(row, desc_idx).strip()
+                if extra:
+                    last_tx["description"] = (last_tx.get("description", "") + " " + extra).strip()
+            continue
+
+        desc = _cell(row, desc_idx).strip()
+        if not desc:
+            # If no description, it's rarely a valid transaction row
+            continue
+
+        amt_val = _parse_amount(_cell(row, amt_idx))
+        if amt_val is None:
+            # If it isn't a continuation row (handled above) and amount is missing, skip
+            continue
+
+        tx_date_raw = _cell(row, tx_date_idx)
+        post_date_raw = _cell(row, post_date_idx)
+
+        tx_date_iso = _parse_date(tx_date_raw, default_year=year_int) if tx_date_idx is not None else None
+        post_date_iso = _parse_date(post_date_raw, default_year=year_int) if post_date_idx is not None else None
+
+        # If we expect a transaction date column but couldn't parse it, skip (prevents garbage rows)
+        if tx_date_idx is not None and not tx_date_iso:
+            continue
+
+        tx: Dict[str, object] = {
+            "transaction_date": tx_date_iso,
+            "posting_date": post_date_iso,
+            "description": desc,
+            "amount": float(amt_val),
+            "source": source,
+            "section": section_name,
+        }
+
+        out.append(tx)
+        last_tx = tx
+
+    return out
+
+
 # @time_it
 def debug_parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None):
     profile = load_bank_profile(bank)
@@ -873,20 +1147,6 @@ def debug_parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] =
                 start_y = item["bottom"]
                 left_x, right_x = item["left"], page.width
                 header_x_range = (left_x, item["right"])
-                
-                # labels = section.get("header_labels", [])
-                # if labels:
-                #     # Refine Horizontal Boundaries using header labels
-                #     end_y = item["bottom"] + 60 # Approx height of header area
-                #     # Determine Search Strip (a small vertical area containing the table headers)
-                #     search_strip_bbox = (left_x, start_y, right_x, end_y)
-                #     # Horizontal Boundaries: Find leftmost and rightmost text in the header row
-                #     left_edge = find_header_label_x_coordinate(page, search_strip_bbox, labels[0], edge="left")
-                #     right_edge = find_header_label_x_coordinate(page, search_strip_bbox, labels[-1], edge="right")
-                #     if left_edge is not None:
-                #         left_x = left_edge
-                #     if right_edge is not None:
-                #         right_x = right_edge
                 
                 # Vertical Boundaries: Define the search ceiling (start_y) and floor (end_y) for the table
                 max_y = page_section_positions[i+1]["top"] if i + 1 < len(page_section_positions) else page.height
@@ -1184,7 +1444,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
 
                     # --- Parse & normalize rows ---
                     try:
-                        new_txs = [] #Todo: Implemnt a robust parsing logic that can handle common anomalies
+                        new_txs = parse_rows(table_rows, section, source=source_name, tax_year=str(tax_year or datetime.now().year), rows_only=not bool(rows_bbox))
                     except Exception as e:
                         notify(
                             "Failed parsing section %s in %s (page %d): %s"
