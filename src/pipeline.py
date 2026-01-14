@@ -45,7 +45,7 @@ def ingest_statement(file_path, bank: str, tax_year: Optional[int] = None):
 
     elif suffix == ".pdf":
         notify(f"Detected PDF input for {bank}", level="info")
-        return pdf_ingest.parse_pdf(path, bank)
+        return pdf_ingest.parse_pdf(path, bank, tax_year=tax_year)
 
     else:
         raise ValueError(f"Unsupported file type: {suffix}")
