@@ -32,10 +32,10 @@ def test_ingest_statement_account_and_banks(fake_data_dir, monkeypatch):
 
     # Monkeypatch pdf_ingest to avoid real PDF parsing
     from src import pdf_ingest
-    monkeypatch.setattr(pdf_ingest, "parse_pdf", lambda f, p: [
-        {"transaction_date": "2025-05-01", "description": "PDF Tx", "amount": 123.45,
-         "balance": None, "source": "CIBC", "section": "Transactions"}
-    ])
+    monkeypatch.setattr(pdf_ingest, "parse_pdf", lambda f, p, tax_year=None: [
+         {"transaction_date": "2025-05-01", "description": "PDF Tx", "amount": 123.45,
+          "balance": None, "source": "CIBC", "section": "Transactions"}
+     ])
 
     # Monkeypatch csv_ingest to simplify parsing
     from src import csv_ingest
