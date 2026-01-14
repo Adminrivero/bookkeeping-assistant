@@ -10,6 +10,7 @@ import csv
 import pytest
 from pathlib import Path
 from src import pdf_ingest
+from typing import List
 
 # --- Fixtures ---
 
@@ -208,3 +209,15 @@ def test_parse_pdf_error(monkeypatch, tmp_path):
 
     with pytest.raises(ValueError):
         pdf_ingest.parse_pdf(pdf_file, "cibc")
+
+def test_parse_rows_single_row_no_header():
+    # Single data row and rows_only=False should NOT drop the only row
+    rows: List[List[str | None]] = [["Jan 03", "", "Some Merchant", "12.34"]]
+    section = {
+        "columns": {"transaction_date": 0, "posting_date": 1, "description": 2, "amount": 3},
+        "section_name": "Transactions",
+    }
+    txs = pdf_ingest.parse_rows(rows, section, source="Triangle", tax_year="2025", rows_only=True, max_header_rows=2)
+    assert len(txs) == 1
+    assert txs[0]["description"].startswith("Some Merchant")
+    assert txs[0]["amount"] == 12.34
