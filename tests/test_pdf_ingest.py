@@ -10,6 +10,7 @@ import csv
 import pytest
 from pathlib import Path
 from src import pdf_ingest
+from typing import List
 
 # --- Fixtures ---
 
@@ -84,13 +85,22 @@ def test_parse_section(sample_transactions, triangle_profile):
     assert txs[0]["description"].startswith("TD BANKLINE")
     assert isinstance(txs[0]["amount"], float)
 
-@pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
 def test_export_csv(tmp_dir, sample_transactions, triangle_profile):
-    # Convert sample rows into normalized dicts
-    table = [["TRANSACTION DATE", "POSTING DATE", "DESCRIPTION", "AMOUNT"]] + sample_transactions
+    # Build normalized txs manually (avoid parse_section dependency)
     section_config = triangle_profile["sections"][2]  # Purchases section
-    # txs = pdf_ingest.parse_section(table, section_config, triangle_profile["bank_name"])
+    section_name = section_config.get("section_name", "Purchases")
+    bank_name = triangle_profile.get("bank_name", "Triangle MasterCard")
+
     txs = []
+    for r in sample_transactions:
+        txs.append({
+            "transaction_date": "2025-01-01",
+            "posting_date": None,
+            "description": str(r[2]),
+            "amount": float(str(r[3]).replace("$", "").replace(",", "")),
+            "source": bank_name,
+            "section": section_name,
+        })
 
     out_path = tmp_dir / "output.csv"
     pdf_ingest.export_csv(txs, out_path)
@@ -100,8 +110,8 @@ def test_export_csv(tmp_dir, sample_transactions, triangle_profile):
         reader = csv.DictReader(f)
         rows = list(reader)
         assert len(rows) == 3
-        assert rows[0]["source"] == "Triangle MasterCard"
-        assert rows[0]["section"] == "Purchases"
+        assert rows[0]["source"] == bank_name
+        assert rows[0]["section"] == section_name
 
 @pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
 def test_parse_section_payments(cibc_profile):
@@ -208,3 +218,15 @@ def test_parse_pdf_error(monkeypatch, tmp_path):
 
     with pytest.raises(ValueError):
         pdf_ingest.parse_pdf(pdf_file, "cibc")
+
+def test_parse_rows_single_row_no_header():
+    # Single data row and rows_only=False should NOT drop the only row
+    rows: List[List[str | None]] = [["Jan 03", "", "Some Merchant", "12.34"]]
+    section = {
+        "columns": {"transaction_date": 0, "posting_date": 1, "description": 2, "amount": 3},
+        "section_name": "Transactions",
+    }
+    txs = pdf_ingest.parse_rows(rows, section, source="Triangle", tax_year="2025", rows_only=True, max_header_rows=2)
+    assert len(txs) == 1
+    assert txs[0]["description"].startswith("Some Merchant")
+    assert txs[0]["amount"] == 12.34
