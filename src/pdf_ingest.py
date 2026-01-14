@@ -372,8 +372,8 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
         dict|None: Bounding box dict or None if not found
     """
     # Debug section: visualize search area
-    if debug_mode:
-        debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
     # End debug section
     
     search_strip = page.crop(search_area_bbox)
@@ -683,8 +683,8 @@ def get_table_edges(page, search_area_bbox, section, bank_name, footer_bbox=None
     Determines table boundaries by combining text-header detection and geometric line analysis.
     """
     # Debug section: visualize search area
-    if debug_mode:
-        debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_edges-debug_search_area.png")
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_edges-debug_search_area.png")
         # test_area_bbox = (0, 0, page.width, search_area_bbox[1])
         # debug_visualize_search_area(page, test_area_bbox, action="save", filename=f"get_table_edges-debug_test_area.png")
     # End debug section
@@ -881,8 +881,11 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
 
     # Skip headers if caller says header rows are present
     if not rows_only:
-        drop_n = min(max(0, int(max_header_rows)), len(clean_rows))
-        clean_rows = clean_rows[drop_n:]
+        drop_n = max(0, int(max_header_rows))
+        if 0 < drop_n < len(clean_rows):
+            clean_rows = clean_rows[drop_n:]
+        elif drop_n >= len(clean_rows):
+            return []
 
     if not clean_rows:
         return []
@@ -1444,7 +1447,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
 
                     # --- Parse & normalize rows ---
                     try:
-                        new_txs = parse_rows(table_rows, section, source=source_name, tax_year=str(tax_year or datetime.now().year), rows_only=not bool(rows_bbox))
+                        new_txs = parse_rows(table_rows, section, source=source_name, tax_year=str(tax_year or datetime.now().year), rows_only=bool(rows_bbox))
                     except Exception as e:
                         notify(
                             "Failed parsing section %s in %s (page %d): %s"
