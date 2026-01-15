@@ -144,10 +144,7 @@ def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles
     if matching_files:
         # Use the first match (or pick the best one if multiple)
         profile_path = matching_files[0]
-        notify(
-            f"Bank '{bank}' not found exactly; using fuzzy match '{profile_path.stem}'",
-            level="info"
-        )
+        notify(f"No exact profile found for bank '{bank}'. Using closest match: '{profile_path.stem}'.", level="info")
         with open(profile_path, "r") as f:
             profile = json.load(f)
         with open(schema_path, "r") as f:
