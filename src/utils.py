@@ -30,7 +30,6 @@ def notify(message: str, level: str = "info"):
         log_fn = getattr(logging, level, logging.info)
         log_fn(message)
     else:
-        # print(message)
         try:
             print(message)
         except UnicodeEncodeError:
@@ -106,20 +105,56 @@ def load_rules(rules_path: Path) -> Dict[str, Any]:
 def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles"), schema_filename: str = "profile_template.json") -> Dict[str, Any]:
     """
     Load and validate a per-bank profile config.
-    - profiles_dir: directory containing <bank>.json and profile_template.json
+    Supports fuzzy matching: if exact bank.json not found, searches for partial matches.
+    
+    Args:
+        bank: Bank identifier (e.g., "td", "TD Visa", "triangle")
+        profiles_dir: Directory containing <bank>.json and profile_template.json
+        schema_filename: Name of the JSON schema file
+    
+    Returns:
+        Dict[str, Any]: Validated bank profile config
+    
+    Raises:
+        FileNotFoundError: If no profile found (exact or partial match)
     """
-    profile_path = Path(profiles_dir) / f"{bank}.json"
-    schema_path = Path(profiles_dir) / schema_filename
+    profiles_dir = Path(profiles_dir)
+    schema_path = profiles_dir / schema_filename
 
-    if not profile_path.exists():
-        raise FileNotFoundError(f"No profile config found for bank: {bank}")
     if not schema_path.exists():
         raise FileNotFoundError(f"No profile schema found at: {schema_path}")
 
-    with open(profile_path, "r") as f:
-        profile = json.load(f)
-    with open(schema_path, "r") as f:
-        schema = json.load(f)
-        
-    jsonschema.validate(instance=profile, schema=schema)
-    return profile
+    # --- Try exact match first ---
+    profile_path = profiles_dir / f"{bank}.json"
+    if profile_path.exists():
+        with open(profile_path, "r") as f:
+            profile = json.load(f)
+        with open(schema_path, "r") as f:
+            schema = json.load(f)
+        jsonschema.validate(profile, schema)
+        return profile
+
+    # --- Fuzzy match: search for files containing the bank id (case-insensitive) ---
+    bank_lower = bank.lower()
+    matching_files = [
+        f for f in profiles_dir.glob("*.json")
+        if f.name != schema_filename and bank_lower in f.stem.lower()
+    ]
+
+    if matching_files:
+        # Use the first match (or pick the best one if multiple)
+        profile_path = matching_files[0]
+        notify(
+            f"Bank '{bank}' not found exactly; using fuzzy match '{profile_path.stem}'",
+            level="info"
+        )
+        with open(profile_path, "r") as f:
+            profile = json.load(f)
+        with open(schema_path, "r") as f:
+            schema = json.load(f)
+        jsonschema.validate(profile, schema)
+        return profile
+
+    # --- No match found ---
+    available = [f.stem for f in profiles_dir.glob("*.json") if f.name != schema_filename]
+    raise FileNotFoundError(f"No profile found for bank '{bank}'. Available profiles: {', '.join(available)}")
