@@ -79,7 +79,7 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
     """
     # Crop and render
     search_strip = page.crop(crop_bbox)
-    im = search_strip.to_image()
+    im = search_strip.to_image(resolution=150)
     im.draw_rects([search_strip.bbox], stroke="red", fill=None)
 
     action = action.lower()
@@ -263,6 +263,84 @@ def _extract_horizontal_lines(cropped_search_area, ascending=True, consolidate_s
     # If not consolidating, return each normalized segment as a single-element list so the return type is consistent
     normalized = sorted([_normalize_segment(s) for s in combined_segments], key=lambda s: s["top"], reverse=not ascending)
     return [[seg] for seg in normalized]
+
+
+def detect_statement_period(text: str):
+    """
+    Detect statement period date range from text using regex patterns and inference logic.
+    
+    Parses date ranges like:
+    - "December 26, 2023 to January 25, 2024"
+    - "June 24 to July 23, 2024"
+    - "December 08. 2023 to January 08, 2024"
+    - "May08,2025toJune09,2025"
+    
+    Args:
+        text: string containing the statement period information
+        
+    Returns:
+        dict with 'start' and 'end' datetime objects, or None if not found
+    """
+    if not text:
+        return None
+    
+    # Normalize text (handle OCR dots, and spaces)
+    text = re.sub(r"\.\s+", " ", text).replace("\n", " ")
+
+    # Allow optional spaces between Month and Day and around commas.
+    # Use distinct group names for start/end to avoid regex group redefinition errors.
+    month = r"(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|" \
+            r"JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)"
+    start_pat = rf"(?P<start_month>{month})\s*(?P<start_day>\d{{1,2}})(?:,?\s*(?P<start_year>\d{{4}}))?"
+    end_pat = rf"(?P<end_month>{month})\s*(?P<end_day>\d{{1,2}})(?:,?\s*(?P<end_year>\d{{4}}))?"
+
+    # Separator allows: "to", en dash, hyphen, with optional surrounding whitespace
+    sep_pat = r"\s*(?:to|–|-)\s*"
+
+    range_pat = rf"{start_pat}{sep_pat}{end_pat}"
+
+    match = re.search(range_pat, text, re.IGNORECASE)
+    if not match:
+        return None
+
+    def _build_date(prefix: str, fallback_year: Optional[int] = None) -> Optional[datetime]:
+        mon = match.group(f"{prefix}_month")
+        day_raw = match.group(f"{prefix}_day")
+        year_raw = match.group(f"{prefix}_year")
+
+        if not mon or not day_raw:
+            return None
+
+        day = int(day_raw)
+        y = int(year_raw) if year_raw else fallback_year
+        if y is None:
+            return None
+
+        # Normalize month name to %b or %B compatible parsing
+        mon_norm = mon.strip().title()
+        for fmt in ("%B", "%b"):
+            try:
+                month_num = datetime.strptime(mon_norm, fmt).month
+                return datetime(y, month_num, day)
+            except ValueError:
+                continue
+        return None
+
+    # End date should ideally contain the year; if not, we can't infer reliably
+    end_dt = _build_date("end", fallback_year=None)
+    if not end_dt:
+        return None
+
+    # Start date: if missing year, infer from end_dt (handles Dec -> Jan rollover)
+    start_dt = _build_date("start", fallback_year=end_dt.year)
+    if not start_dt:
+        return None
+
+    if start_dt.month > end_dt.month:
+        # rollover case: Dec -> Jan
+        start_dt = start_dt.replace(year=end_dt.year - 1)
+
+    return {"start": start_dt, "end": end_dt}
 
 
 # @time_it
@@ -1288,6 +1366,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
     skip_indices = set(profile.get("skip_pages_by_index", []) or [])
     header_anchor = profile.get("page_header_anchor", None)
     source_name = profile.get("bank_name", bank)
+    statement_period = None
 
     # Track sections found on this statement (kept for potential future validation)
     sections_map = {section["section_name"]: [] for section in sections}
@@ -1303,11 +1382,18 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                 left_margin = 0.0
                 if header_anchor:
                     try:
-                        header_area = page.crop((0, 0, page.width, page.height * 0.15))
+                        header_area = page.crop((0, 0, page.width, page.height * 0.2)) # top 20% of the page
                         pattern = r'\s+'.join(re.escape(word) for word in header_anchor.split())
                         anchors = header_area.search(pattern, flags=re.IGNORECASE)
                         if not anchors:
                             continue
+                        # --- Extract statement period ---
+                        if debug_mode:
+                            debug_visualize_search_area(page, (0, 0, page.width, page.height * 0.15), action="save", filename=f"page_{page_num+1}_header_anchor_search_area.png")
+                        if not statement_period:
+                            header_area_text = header_area.extract_text() or ""
+                            statement_period = detect_statement_period(header_area_text)
+                        # Set page left margin based on found header anchor for better alignment in downstream section header detection
                         left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
                     except Exception:
                         anchors = []
