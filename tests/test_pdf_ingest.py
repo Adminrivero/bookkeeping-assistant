@@ -230,3 +230,22 @@ def test_parse_rows_single_row_no_header():
     assert len(txs) == 1
     assert txs[0]["description"].startswith("Some Merchant")
     assert txs[0]["amount"] == 12.34
+
+
+@pytest.mark.parametrize(
+    "text,start_iso,end_iso",
+    [
+        ("Dec 26 to Jan 25, 2024", "2023-12-26", "2024-01-25"),
+        ("Dec26toJan25,2024", "2023-12-26", "2024-01-25"),
+        ("December 24, 2024 to January 23, 2025", "2024-12-24", "2025-01-23"),
+        ("December08,2023toJanuary08,2024", "2023-12-08", "2024-01-08"),
+        ("May 08, 2025 to June 09, 2025", "2025-05-08", "2025-06-09"),
+        ("December 08. 2023 to January 08, 2024", "2023-12-08", "2024-01-08"),
+        ("May08,2025toJune09,2025", "2025-05-08", "2025-06-09"),
+    ],
+)
+def test_detect_statement_period_variants(text, start_iso, end_iso):
+    result = pdf_ingest.detect_statement_period(text)
+    assert result is not None
+    assert result["start"].strftime("%Y-%m-%d") == start_iso
+    assert result["end"].strftime("%Y-%m-%d") == end_iso
