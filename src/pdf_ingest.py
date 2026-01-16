@@ -279,7 +279,7 @@ def detect_statement_period(text: str):
         text: string containing the statement period information
         
     Returns:
-        dict with 'start' and 'end' datetime objects, or None if not found
+        dict with keys 'start', 'end', and 'statement_year' if a valid period is detected, otherwise None
     """
     if not text:
         return None
@@ -335,12 +335,15 @@ def detect_statement_period(text: str):
     start_dt = _build_date("start", fallback_year=end_dt.year)
     if not start_dt:
         return None
+    
+    # Statement year: The end date of the period range serves as the year anchor for the entire statement.
+    stmt_year = end_dt.year
 
     if start_dt.month > end_dt.month:
         # rollover case: Dec -> Jan
         start_dt = start_dt.replace(year=end_dt.year - 1)
 
-    return {"start": start_dt, "end": end_dt}
+    return {"start": start_dt, "end": end_dt, "statement_year": stmt_year}
 
 
 # @time_it
@@ -1383,17 +1386,33 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                 if header_anchor:
                     try:
                         header_area = page.crop((0, 0, page.width, page.height * 0.2)) # top 20% of the page
+                        
+                        # --- Validate header anchor presence with flexible pattern ---
                         pattern = r'\s+'.join(re.escape(word) for word in header_anchor.split())
                         anchors = header_area.search(pattern, flags=re.IGNORECASE)
                         if not anchors:
                             continue
-                        # --- Extract statement period ---
-                        if debug_mode:
-                            debug_visualize_search_area(page, (0, 0, page.width, page.height * 0.15), action="save", filename=f"page_{page_num+1}_header_anchor_search_area.png")
+                        
+                        # if debug_mode:
+                        #     debug_visualize_search_area(page, (0, 0, page.width, page.height * 0.15), action="save", filename=f"page_{page_num+1}_header_anchor_search_area.png")
+                        
+                        # --- Extract statement period & statement year ---
                         if not statement_period:
                             header_area_text = header_area.extract_text() or ""
                             statement_period = detect_statement_period(header_area_text)
-                        # Set page left margin based on found header anchor for better alignment in downstream section header detection
+                            # Validate detected period against tax_year if provided
+                            if tax_year and statement_period:
+                                statement_year = int(statement_period["statement_year"])
+                                start_dt = statement_period.get("start")
+                                end_dt = statement_period.get("end")
+                                crosses_year = bool(start_dt and end_dt and start_dt.year != end_dt.year)
+                                valid_statement = (statement_year == tax_year) or (crosses_year and (statement_year == tax_year - 1 or statement_year == tax_year + 1))
+                                # If the statement period year doesn't match the provided tax year (considering cross-year statements), skip processing this PDF
+                                if not valid_statement:
+                                    notify(f"Skipping '{pdf_path.name}': detected statement period year {statement_year} does not match provided tax year {tax_year}. Detected period: {statement_period}", "warning")
+                                    return []
+                            
+                        # --- Determine left margin from header anchor position for better alignment of section header search ---
                         left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
                     except Exception:
                         anchors = []
@@ -1424,7 +1443,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
 
                 page_section_positions.sort(key=lambda x: x["top"])
 
-                # 3) For each found section, compute bounds, crop, extract, validate, parse
+                # 3) For each found section, compute bounds, crop, extract, validate, and parse transactions
                 for i, item in enumerate(page_section_positions):
                     section = item["section"]
 
