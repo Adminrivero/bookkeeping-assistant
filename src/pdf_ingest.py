@@ -912,7 +912,7 @@ def validate_extracted_table(table_rows: List[List[str | None]], section_config:
     return True
 
 
-def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source: str, tax_year: str, *, rows_only: bool = True, max_header_rows: int = 2,) -> List[Dict]:
+def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source: str, tax_year: str, *, statement_period: Optional[Dict] = None, rows_only: bool = True, max_header_rows: int = 2,) -> List[Dict]:
     """
     Parse extracted PDF table rows into normalized transaction dicts.
 
@@ -921,12 +921,14 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
       - Multi-line descriptions (continuation rows)
       - Noise/total/footer rows
       - Amount formats: $1,234.56, (123.45), 123.45 CR/DR, unicode minus
+      - If the statement crosses a year boundary (Dec->Jan), filter to only transactions within the requested tax_year.
 
     Args:
         table_rows: Raw extracted rows (list of rows, each row list of cells)
         section_config: Section config from bank profile JSON (must include "columns")
         source: Bank/source name (e.g., "TD Visa", "CIBC", "Triangle MasterCard")
         tax_year: Tax year string (e.g., "2025") used to resolve partial dates (no year in statement rows)
+        statement_period: Optional dict from detect_statement_period with keys: start/end/statement_year
         rows_only: If True, assume table_rows contain only data rows; if False, drop up to max_header_rows
         max_header_rows: Number of leading rows to drop when rows_only=False
 
@@ -953,9 +955,13 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
     # ---- Pre-clean once (performance + consistent downstream logic) ----
     clean_rows: List[List[str]] = []
     for r in table_rows:
-        if not r or not any(r):
+        if not r:
             continue
-        clean_rows.append([str(c).replace("\n", " ").strip() if c is not None else "" for c in r])
+        # Keep row if it contains any non-empty cell once stringified
+        cleaned = [str(c).replace("\n", " ").strip() if c is not None else "" for c in r]
+        if not any(c for c in cleaned):
+            continue
+        clean_rows.append(cleaned)
 
     if not clean_rows:
         return []
@@ -971,7 +977,25 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
     if not clean_rows:
         return []
 
-    year_int = int(tax_year)
+    tax_year_int = int(tax_year)
+    period_start: Optional[datetime] = None
+    period_end: Optional[datetime] = None
+    
+    if statement_period:
+        period_start = statement_period.get("start")
+        period_end = statement_period.get("end")
+        if not isinstance(period_start, datetime):
+            period_start = None
+        if not isinstance(period_end, datetime):
+            period_end = None
+
+    # Determine if we should filter by tax year (only for cross-year statements)
+    crosses_year = False
+    if statement_period and period_start and period_end:
+        try:
+            crosses_year = bool(period_start.year != period_end.year)
+        except Exception:
+            crosses_year = False
 
     def _cell(row: List[str], idx: Optional[int]) -> str:
         if idx is None:
@@ -981,16 +1005,6 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
     _AMT_TOKEN = re.compile(r"-?\d+(?:\.\d+)?")
 
     def _parse_amount(s: str) -> Optional[float]:
-        """
-        Parse an amount cell into float.
-        Supports:
-          - "$1,234.56"
-          - "(123.45)" -> -123.45
-          - "123.45 CR" -> -123.45 (credit reduces balance / payment)
-          - "123.45 DR" ->  123.45
-          - unicode minus "−"
-        Returns None if no numeric token found.
-        """
         if not s:
             return None
 
@@ -1038,15 +1052,10 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
         return any(re.search(p, s) for p in patterns)
 
     def _is_total_or_noise_row(row: List[str]) -> bool:
-        """
-        Reject obvious totals/footers/noise.
-        Keep this conservative: only skip when highly likely non-transaction.
-        """
         joined = " ".join(c for c in row if c).strip().upper()
         if not joined:
             return True
 
-        # Common statement footers/totals
         noise_markers = (
             "TOTAL",
             "TOTALS",
@@ -1064,10 +1073,8 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             "PAGE ",
         )
         if any(m in joined for m in noise_markers):
-            # Avoid false positives: "TOTAL" inside merchant names is rare; still treat as noise
             return True
 
-        # Very short single-cell fragments are usually OCR artifacts
         nonempty = [c for c in row if c and c.strip()]
         if len(nonempty) == 1 and len(nonempty[0]) <= 2:
             return True
@@ -1075,9 +1082,6 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
         return False
 
     def _is_desc_only_continuation(row: List[str]) -> bool:
-        """
-        Continuation row heuristic: has description text but lacks amount and date-like tokens.
-        """
         desc = _cell(row, desc_idx)
         amt = _parse_amount(_cell(row, amt_idx))
 
@@ -1090,19 +1094,18 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
 
         return has_desc and (not has_amount) and (not has_any_date)
 
-    def _parse_date(raw: str, *, default_year: int) -> Optional[str]:
+    def _parse_date_iso(raw: str, *, default_year: int) -> Optional[str]:
         """
         Convert a raw date token to ISO YYYY-MM-DD.
-        Supports:
-          - 12/31, 12/31/2024, 12/31/24
-          - DEC 31, DEC. 31
-        Uses default_year when year is missing.
+        
+        If the raw value omits the year and statement_period is available, infer the correct year
+        using the statement period boundaries (fixes cross-year statements like Dec->Jan).
         """
         s = (raw or "").strip().upper()
         if not s:
             return None
 
-        # Numeric date: M/D[/YY|YYYY]
+        # 1) Try MM/DD/YYYY or M/D/YY with optional year
         m = re.search(r"\b(?P<m>\d{1,2})/(?P<d>\d{1,2})(?:/(?P<y>\d{2,4}))?\b", s)
         if m:
             mm = int(m.group("m"))
@@ -1111,17 +1114,33 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             if yy:
                 y = int(yy)
                 if y < 100:
-                    # Interpret 2-digit year as 20xx (reasonable for modern statements)
                     y += 2000
-            else:
-                y = default_year
+                try:
+                    return datetime(y, mm, dd).strftime("%Y-%m-%d")
+                except ValueError:
+                    return None
+            
+            # No year provided, need to infer
+            if period_start and period_end:
+                # Try default tax year first
+                try:
+                    candidate = datetime(period_end.year, mm, dd)
+                    if candidate > period_end:
+                        candidate = candidate.replace(year=candidate.year - 1)
+                    if candidate < period_start:
+                        candidate = candidate.replace(year=candidate.year + 1)
+                    return candidate.strftime("%Y-%m-%d")
+                except ValueError:
+                    return None
+                
+            # Fallback to default_year if no period info available
             try:
-                return datetime(y, mm, dd).strftime("%Y-%m-%d")
+                return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
             except ValueError:
                 return None
 
-        # Alpha date: "DEC 31" or "DEC. 31"
-        m = re.search(r"\b(?P<mon>JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s+(?P<d>\d{1,2})\b", s)
+        # 2) Try Mon D with optional dot (e.g., "JAN 5" or "JAN. 5")
+        m = re.search(r"\b(?P<mon>JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s*(?P<d>\d{1,2})\b", s)
         if m:
             mon_map = {
                 "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
@@ -1131,12 +1150,40 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             dd = int(m.group("d"))
             if mm <= 0:
                 return None
+            
+            # No year provided, need to infer
+            if period_start and period_end:
+                try:
+                    candidate = datetime(period_end.year, mm, dd)
+                    if candidate > period_end:
+                        candidate = candidate.replace(year=candidate.year - 1)
+                    if candidate < period_start:
+                        candidate = candidate.replace(year=candidate.year + 1)
+                    return candidate.strftime("%Y-%m-%d")
+                except ValueError:
+                    return None
+            
+            # Fallback to default_year if no period info available
             try:
                 return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
             except ValueError:
                 return None
 
         return None
+
+    def _tx_in_tax_year(tx_date_iso: Optional[str]) -> bool:
+        """
+        For cross-year statements, keep only tx whose transaction_date year == tax_year.
+        For non-cross-year statements, always keep.
+        """
+        if not crosses_year:
+            return True
+        if not tx_date_iso:
+            return False
+        try:
+            return int(tx_date_iso[:4]) == tax_year_int
+        except Exception:
+            return False
 
     out: List[Dict] = []
     last_tx: Optional[Dict] = None
@@ -1155,23 +1202,26 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
 
         desc = _cell(row, desc_idx).strip()
         if not desc:
-            # If no description, it's rarely a valid transaction row
             continue
 
         amt_val = _parse_amount(_cell(row, amt_idx))
         if amt_val is None:
-            # If it isn't a continuation row (handled above) and amount is missing, skip
             continue
 
         tx_date_raw = _cell(row, tx_date_idx)
         post_date_raw = _cell(row, post_date_idx)
 
-        tx_date_iso = _parse_date(tx_date_raw, default_year=year_int) if tx_date_idx is not None else None
-        post_date_iso = _parse_date(post_date_raw, default_year=year_int) if post_date_idx is not None else None
+        # IMPORTANT: Use transaction date for tax-year filtering, not posting date.
+        tx_date_iso = _parse_date_iso(tx_date_raw, default_year=tax_year_int) if tx_date_idx is not None else None
 
         # If we expect a transaction date column but couldn't parse it, skip (prevents garbage rows)
         if tx_date_idx is not None and not tx_date_iso:
             continue
+
+        if not _tx_in_tax_year(tx_date_iso):
+            continue
+
+        post_date_iso = _parse_date_iso(post_date_raw, default_year=tax_year_int) if post_date_idx is not None else None
 
         tx: Dict[str, object] = {
             "transaction_date": tx_date_iso,
@@ -1552,7 +1602,13 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
 
                     # --- Parse & normalize rows ---
                     try:
-                        new_txs = parse_rows(table_rows, section, source=source_name, tax_year=str(tax_year or datetime.now().year), rows_only=bool(rows_bbox))
+                        new_txs = parse_rows(
+                            table_rows, 
+                            section, 
+                            source=source_name, 
+                            tax_year=str(tax_year or datetime.now().year), 
+                            statement_period=statement_period, 
+                            rows_only=bool(rows_bbox))
                     except Exception as e:
                         notify(
                             "Failed parsing section %s in %s (page %d): %s"
