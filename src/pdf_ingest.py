@@ -1068,15 +1068,21 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             "TOTAL PAYMENTS",
             "TOTAL CREDITS",
             "TOTAL CHARGES",
+            "TOTAL PURCHASES",
             "TOTAL FEES",
+            "NET AMOUNT",
             "ACCOUNT NUMBER",
-            "PAGE ",
+            "CARD NUMBER",
+            "CARD #",
         )
         if any(m in joined for m in noise_markers):
             return True
 
         nonempty = [c for c in row if c and c.strip()]
-        if len(nonempty) == 1 and len(nonempty[0]) <= 2:
+        nonempty_count = len(nonempty)
+        expected_cols = len(cols)
+        first_cell_present = bool(str(row[0]).strip()) if row and row[0] is not None else False
+        if 1 <= nonempty_count < expected_cols and first_cell_present:
             return True
 
         return False
@@ -1122,18 +1128,22 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             
             # No year provided, need to infer
             if period_start and period_end:
-                # Try default tax year first
+                y = period_end.year  # Default to statement year
+                if period_start.year != period_end.year:
+                    # Statement crosses year boundary
+                    if mm == period_start.month:
+                        y = period_start.year
+                    elif mm == period_end.month:
+                        y = period_end.year
+                    elif mm > period_end.month:
+                        y = period_start.year
+                
                 try:
-                    candidate = datetime(period_end.year, mm, dd)
-                    if candidate > period_end:
-                        candidate = candidate.replace(year=candidate.year - 1)
-                    if candidate < period_start:
-                        candidate = candidate.replace(year=candidate.year + 1)
-                    return candidate.strftime("%Y-%m-%d")
+                    return datetime(y, mm, dd).strftime("%Y-%m-%d")
                 except ValueError:
                     return None
                 
-            # Fallback to default_year if no period info available
+            # Fallback to default_year if no period available
             try:
                 return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
             except ValueError:
@@ -1153,17 +1163,22 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             
             # No year provided, need to infer
             if period_start and period_end:
+                y = period_end.year  # Default to statement year
+                if period_start.year != period_end.year:
+                    # Statement crosses year boundary
+                    if mm == period_start.month:
+                        y = period_start.year
+                    elif mm == period_end.month:
+                        y = period_end.year
+                    elif mm > period_end.month:
+                        y = period_start.year
+                
                 try:
-                    candidate = datetime(period_end.year, mm, dd)
-                    if candidate > period_end:
-                        candidate = candidate.replace(year=candidate.year - 1)
-                    if candidate < period_start:
-                        candidate = candidate.replace(year=candidate.year + 1)
-                    return candidate.strftime("%Y-%m-%d")
+                    return datetime(y, mm, dd).strftime("%Y-%m-%d")
                 except ValueError:
                     return None
             
-            # Fallback to default_year if no period info available
+            # Fallback to default_year if no period available
             try:
                 return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
             except ValueError:
