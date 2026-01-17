@@ -1459,7 +1459,8 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                                 valid_statement = (statement_year == tax_year) or (crosses_year and (statement_year == tax_year - 1 or statement_year == tax_year + 1))
                                 # If the statement period year doesn't match the provided tax year (considering cross-year statements), skip processing this PDF
                                 if not valid_statement:
-                                    notify(f"Skipping '{pdf_path.name}': detected statement period year {statement_year} does not match provided tax year {tax_year}. Detected period: {statement_period}", "warning")
+                                    display_period = f"{statement_period['start'].strftime('%Y-%m-%d') if statement_period.get('start') else 'Unknown'} to {statement_period['end'].strftime('%Y-%m-%d') if statement_period.get('end') else 'Unknown'}"
+                                    notify(f"Skipping '{pdf_path.name}': Statement period year {statement_year} does not match provided tax year {tax_year}. Detected period: {display_period}", "warning")
                                     return []
                             
                         # --- Determine left margin from header anchor position for better alignment of section header search ---
