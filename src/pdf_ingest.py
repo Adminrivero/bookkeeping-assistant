@@ -453,13 +453,14 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
         dict|None: Bounding box dict or None if not found
     """
     # Debug section: visualize search area
-    if debug_mode:
-        debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
-        debug_strip = page.crop(search_area_bbox)
-        texts = debug_strip.extract_text()
+    # if debug_mode:
+    #     debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
+    #     debug_strip = page.crop(search_area_bbox)
+    #     texts = debug_strip.extract_text()
     # End debug section
     
     search_strip = page.crop(search_area_bbox)
+    
     # Gate 1: Vertical Slice Gate - Only consider matches that fall within the vertical bounds of the search area
     pattern = r'\s*'.join(re.escape(word) for word in footer_text.split())
     matches = search_strip.search(pattern)
@@ -707,8 +708,8 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     line_bottom_y = line_bottom.get("bottom", 0) if isinstance(line_bottom, dict) else 0
     header_bbox["coords"] = (left, t, right, max(b, line_bottom_y))
     
-    if debug_mode:
-        debug_visualize_search_area(page, header_bbox["coords"], action="save", filename=f"get_table_header_bbox-debug_final_header_outter_bbox.png")
+    # if debug_mode:
+    #     debug_visualize_search_area(page, header_bbox["coords"], action="save", filename=f"get_table_header_bbox-debug_final_header_outter_bbox.png")
     
     if not header_bbox["vertical_lines_bp"]:
         # Fallback: Word-Aware Refinement for Horizontal Breakpoints
@@ -754,8 +755,8 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
             # Add the final edge
             header_bbox["vertical_lines_bp"].append(max(sorted_matches[-1]["x1"], right))
             
-            if debug_mode:
-                debug_visualize_column_zones(page, header_bbox["coords"], header_bbox["vertical_lines_bp"], action="save", filename=f"get_table_header_bbox-debug_column_zones-{bank_name}.png")
+            # if debug_mode:
+            #     debug_visualize_column_zones(page, header_bbox["coords"], header_bbox["vertical_lines_bp"], action="save", filename=f"get_table_header_bbox-debug_column_zones-{bank_name}.png")
 
     if not header_bbox["text_bbox"] and not header_bbox["line_bbox"] and not header_bbox["vertical_lines_bp"]:
         return None
@@ -1553,6 +1554,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                         continue
                     
                     # Gate 2: Get precise table bounds based on text anchors and lines
+                    table_edges = None
                     table_edges = get_table_edges(page, strip_bbox, section, source_name, footer_bbox=footer_bbox)
                     
                     if table_edges and table_edges.get("coords"):
