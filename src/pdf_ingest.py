@@ -453,13 +453,16 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
         dict|None: Bounding box dict or None if not found
     """
     # Debug section: visualize search area
-    # if debug_mode:
-    #     debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
+    if debug_mode:
+        debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
+        debug_strip = page.crop(search_area_bbox)
+        texts = debug_strip.extract_text()
     # End debug section
     
     search_strip = page.crop(search_area_bbox)
     # Gate 1: Vertical Slice Gate - Only consider matches that fall within the vertical bounds of the search area
-    matches = search_strip.search(footer_text)
+    pattern = r'\s*'.join(re.escape(word) for word in footer_text.split())
+    matches = search_strip.search(pattern)
     
     if not matches:
         return None
@@ -1562,7 +1565,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                         rows_bbox = None
 
                     # Guard: invalid crop
-                    min_w_threshold, min_h_threshold = 50.0, 10.0
+                    min_w_threshold, min_h_threshold = 50.0, 7.0
                     if rows_bbox and (rows_bbox[2] - rows_bbox[0] < min_w_threshold or rows_bbox[3] - rows_bbox[1] < min_h_threshold):
                         continue
                     if right_x - left_x < min_w_threshold or bottom_y - top_y < min_h_threshold:
