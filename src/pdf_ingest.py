@@ -79,7 +79,7 @@ def debug_visualize_search_area(page, crop_bbox, action: str = "save", filename:
     """
     # Crop and render
     search_strip = page.crop(crop_bbox)
-    im = search_strip.to_image()
+    im = search_strip.to_image(resolution=150)
     im.draw_rects([search_strip.bbox], stroke="red", fill=None)
 
     action = action.lower()
@@ -265,6 +265,87 @@ def _extract_horizontal_lines(cropped_search_area, ascending=True, consolidate_s
     return [[seg] for seg in normalized]
 
 
+def detect_statement_period(text: str):
+    """
+    Detect statement period date range from text using regex patterns and inference logic.
+    
+    Parses date ranges like:
+    - "December 26, 2023 to January 25, 2024"
+    - "June 24 to July 23, 2024"
+    - "December 08. 2023 to January 08, 2024"
+    - "May08,2025toJune09,2025"
+    
+    Args:
+        text: string containing the statement period information
+        
+    Returns:
+        dict with keys 'start', 'end', and 'statement_year' if a valid period is detected, otherwise None
+    """
+    if not text:
+        return None
+    
+    # Normalize text (handle OCR dots, and spaces)
+    text = re.sub(r"\.\s+", " ", text).replace("\n", " ")
+
+    # Allow optional spaces between Month and Day and around commas.
+    # Use distinct group names for start/end to avoid regex group redefinition errors.
+    month = r"(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|" \
+            r"JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)"
+    start_pat = rf"(?P<start_month>{month})\s*(?P<start_day>\d{{1,2}})(?:,?\s*(?P<start_year>\d{{4}}))?"
+    end_pat = rf"(?P<end_month>{month})\s*(?P<end_day>\d{{1,2}})(?:,?\s*(?P<end_year>\d{{4}}))?"
+
+    # Separator allows: "to", en dash, hyphen, with optional surrounding whitespace
+    sep_pat = r"\s*(?:to|–|-)\s*"
+
+    range_pat = rf"{start_pat}{sep_pat}{end_pat}"
+
+    match = re.search(range_pat, text, re.IGNORECASE)
+    if not match:
+        return None
+
+    def _build_date(prefix: str, fallback_year: Optional[int] = None) -> Optional[datetime]:
+        mon = match.group(f"{prefix}_month")
+        day_raw = match.group(f"{prefix}_day")
+        year_raw = match.group(f"{prefix}_year")
+
+        if not mon or not day_raw:
+            return None
+
+        day = int(day_raw)
+        y = int(year_raw) if year_raw else fallback_year
+        if y is None:
+            return None
+
+        # Normalize month name to %b or %B compatible parsing
+        mon_norm = mon.strip().title()
+        for fmt in ("%B", "%b"):
+            try:
+                month_num = datetime.strptime(mon_norm, fmt).month
+                return datetime(y, month_num, day)
+            except ValueError:
+                continue
+        return None
+
+    # End date should ideally contain the year; if not, we can't infer reliably
+    end_dt = _build_date("end", fallback_year=None)
+    if not end_dt:
+        return None
+
+    # Start date: if missing year, infer from end_dt (handles Dec -> Jan rollover)
+    start_dt = _build_date("start", fallback_year=end_dt.year)
+    if not start_dt:
+        return None
+    
+    # Statement year: The end date of the period range serves as the year anchor for the entire statement.
+    stmt_year = end_dt.year
+
+    if start_dt.month > end_dt.month:
+        # rollover case: Dec -> Jan
+        start_dt = start_dt.replace(year=end_dt.year - 1)
+
+    return {"start": start_dt, "end": end_dt, "statement_year": stmt_year}
+
+
 # @time_it
 def get_page_left_margin(page, top_fraction: float = 1.0, left_fraction: float = 1.0) -> float:
     """Find the leftmost x0 coordinate of text in the top portion of the page.
@@ -374,11 +455,15 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
     # Debug section: visualize search area
     # if debug_mode:
     #     debug_visualize_search_area(page, search_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area.png")
+    #     debug_strip = page.crop(search_area_bbox)
+    #     texts = debug_strip.extract_text()
     # End debug section
     
     search_strip = page.crop(search_area_bbox)
+    
     # Gate 1: Vertical Slice Gate - Only consider matches that fall within the vertical bounds of the search area
-    matches = search_strip.search(footer_text)
+    pattern = r'\s*'.join(re.escape(word) for word in footer_text.split())
+    matches = search_strip.search(pattern)
     
     if not matches:
         return None
@@ -623,8 +708,8 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     line_bottom_y = line_bottom.get("bottom", 0) if isinstance(line_bottom, dict) else 0
     header_bbox["coords"] = (left, t, right, max(b, line_bottom_y))
     
-    if debug_mode:
-        debug_visualize_search_area(page, header_bbox["coords"], action="save", filename=f"get_table_header_bbox-debug_final_header_outter_bbox.png")
+    # if debug_mode:
+    #     debug_visualize_search_area(page, header_bbox["coords"], action="save", filename=f"get_table_header_bbox-debug_final_header_outter_bbox.png")
     
     if not header_bbox["vertical_lines_bp"]:
         # Fallback: Word-Aware Refinement for Horizontal Breakpoints
@@ -670,8 +755,8 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
             # Add the final edge
             header_bbox["vertical_lines_bp"].append(max(sorted_matches[-1]["x1"], right))
             
-            if debug_mode:
-                debug_visualize_column_zones(page, header_bbox["coords"], header_bbox["vertical_lines_bp"], action="save", filename=f"get_table_header_bbox-debug_column_zones-{bank_name}.png")
+            # if debug_mode:
+            #     debug_visualize_column_zones(page, header_bbox["coords"], header_bbox["vertical_lines_bp"], action="save", filename=f"get_table_header_bbox-debug_column_zones-{bank_name}.png")
 
     if not header_bbox["text_bbox"] and not header_bbox["line_bbox"] and not header_bbox["vertical_lines_bp"]:
         return None
@@ -831,7 +916,7 @@ def validate_extracted_table(table_rows: List[List[str | None]], section_config:
     return True
 
 
-def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source: str, tax_year: str, *, rows_only: bool = True, max_header_rows: int = 2,) -> List[Dict]:
+def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source: str, tax_year: str, *, statement_period: Optional[Dict] = None, rows_only: bool = True, max_header_rows: int = 2,) -> List[Dict]:
     """
     Parse extracted PDF table rows into normalized transaction dicts.
 
@@ -840,12 +925,14 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
       - Multi-line descriptions (continuation rows)
       - Noise/total/footer rows
       - Amount formats: $1,234.56, (123.45), 123.45 CR/DR, unicode minus
+      - If the statement crosses a year boundary (Dec->Jan), filter to only transactions within the requested tax_year.
 
     Args:
         table_rows: Raw extracted rows (list of rows, each row list of cells)
         section_config: Section config from bank profile JSON (must include "columns")
         source: Bank/source name (e.g., "TD Visa", "CIBC", "Triangle MasterCard")
         tax_year: Tax year string (e.g., "2025") used to resolve partial dates (no year in statement rows)
+        statement_period: Optional dict from detect_statement_period with keys: start/end/statement_year
         rows_only: If True, assume table_rows contain only data rows; if False, drop up to max_header_rows
         max_header_rows: Number of leading rows to drop when rows_only=False
 
@@ -872,9 +959,13 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
     # ---- Pre-clean once (performance + consistent downstream logic) ----
     clean_rows: List[List[str]] = []
     for r in table_rows:
-        if not r or not any(r):
+        if not r:
             continue
-        clean_rows.append([str(c).replace("\n", " ").strip() if c is not None else "" for c in r])
+        # Keep row if it contains any non-empty cell once stringified
+        cleaned = [str(c).replace("\n", " ").strip() if c is not None else "" for c in r]
+        if not any(c for c in cleaned):
+            continue
+        clean_rows.append(cleaned)
 
     if not clean_rows:
         return []
@@ -890,7 +981,25 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
     if not clean_rows:
         return []
 
-    year_int = int(tax_year)
+    tax_year_int = int(tax_year)
+    period_start: Optional[datetime] = None
+    period_end: Optional[datetime] = None
+    
+    if statement_period:
+        period_start = statement_period.get("start")
+        period_end = statement_period.get("end")
+        if not isinstance(period_start, datetime):
+            period_start = None
+        if not isinstance(period_end, datetime):
+            period_end = None
+
+    # Determine if we should filter by tax year (only for cross-year statements)
+    crosses_year = False
+    if statement_period and period_start and period_end:
+        try:
+            crosses_year = bool(period_start.year != period_end.year)
+        except Exception:
+            crosses_year = False
 
     def _cell(row: List[str], idx: Optional[int]) -> str:
         if idx is None:
@@ -900,16 +1009,6 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
     _AMT_TOKEN = re.compile(r"-?\d+(?:\.\d+)?")
 
     def _parse_amount(s: str) -> Optional[float]:
-        """
-        Parse an amount cell into float.
-        Supports:
-          - "$1,234.56"
-          - "(123.45)" -> -123.45
-          - "123.45 CR" -> -123.45 (credit reduces balance / payment)
-          - "123.45 DR" ->  123.45
-          - unicode minus "−"
-        Returns None if no numeric token found.
-        """
         if not s:
             return None
 
@@ -957,15 +1056,10 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
         return any(re.search(p, s) for p in patterns)
 
     def _is_total_or_noise_row(row: List[str]) -> bool:
-        """
-        Reject obvious totals/footers/noise.
-        Keep this conservative: only skip when highly likely non-transaction.
-        """
         joined = " ".join(c for c in row if c).strip().upper()
         if not joined:
             return True
 
-        # Common statement footers/totals
         noise_markers = (
             "TOTAL",
             "TOTALS",
@@ -978,25 +1072,26 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             "TOTAL PAYMENTS",
             "TOTAL CREDITS",
             "TOTAL CHARGES",
+            "TOTAL PURCHASES",
             "TOTAL FEES",
+            "NET AMOUNT",
             "ACCOUNT NUMBER",
-            "PAGE ",
+            "CARD NUMBER",
+            "CARD #",
         )
         if any(m in joined for m in noise_markers):
-            # Avoid false positives: "TOTAL" inside merchant names is rare; still treat as noise
             return True
 
-        # Very short single-cell fragments are usually OCR artifacts
         nonempty = [c for c in row if c and c.strip()]
-        if len(nonempty) == 1 and len(nonempty[0]) <= 2:
+        nonempty_count = len(nonempty)
+        expected_cols = len(cols)
+        first_cell_present = bool(str(row[0]).strip()) if row and row[0] is not None else False
+        if 1 <= nonempty_count < expected_cols and first_cell_present:
             return True
 
         return False
 
     def _is_desc_only_continuation(row: List[str]) -> bool:
-        """
-        Continuation row heuristic: has description text but lacks amount and date-like tokens.
-        """
         desc = _cell(row, desc_idx)
         amt = _parse_amount(_cell(row, amt_idx))
 
@@ -1009,19 +1104,18 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
 
         return has_desc and (not has_amount) and (not has_any_date)
 
-    def _parse_date(raw: str, *, default_year: int) -> Optional[str]:
+    def _parse_date_iso(raw: str, *, default_year: int) -> Optional[str]:
         """
         Convert a raw date token to ISO YYYY-MM-DD.
-        Supports:
-          - 12/31, 12/31/2024, 12/31/24
-          - DEC 31, DEC. 31
-        Uses default_year when year is missing.
+        
+        If the raw value omits the year and statement_period is available, infer the correct year
+        using the statement period boundaries (fixes cross-year statements like Dec->Jan).
         """
         s = (raw or "").strip().upper()
         if not s:
             return None
 
-        # Numeric date: M/D[/YY|YYYY]
+        # 1) Try MM/DD/YYYY or M/D/YY with optional year
         m = re.search(r"\b(?P<m>\d{1,2})/(?P<d>\d{1,2})(?:/(?P<y>\d{2,4}))?\b", s)
         if m:
             mm = int(m.group("m"))
@@ -1030,17 +1124,37 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             if yy:
                 y = int(yy)
                 if y < 100:
-                    # Interpret 2-digit year as 20xx (reasonable for modern statements)
                     y += 2000
-            else:
-                y = default_year
+                try:
+                    return datetime(y, mm, dd).strftime("%Y-%m-%d")
+                except ValueError:
+                    return None
+            
+            # No year provided, need to infer
+            if period_start and period_end:
+                y = period_end.year  # Default to statement year
+                if period_start.year != period_end.year:
+                    # Statement crosses year boundary
+                    if mm == period_start.month:
+                        y = period_start.year
+                    elif mm == period_end.month:
+                        y = period_end.year
+                    elif mm > period_end.month:
+                        y = period_start.year
+                
+                try:
+                    return datetime(y, mm, dd).strftime("%Y-%m-%d")
+                except ValueError:
+                    return None
+                
+            # Fallback to default_year if no period available
             try:
-                return datetime(y, mm, dd).strftime("%Y-%m-%d")
+                return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
             except ValueError:
                 return None
 
-        # Alpha date: "DEC 31" or "DEC. 31"
-        m = re.search(r"\b(?P<mon>JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s+(?P<d>\d{1,2})\b", s)
+        # 2) Try Mon D with optional dot (e.g., "JAN 5" or "JAN. 5")
+        m = re.search(r"\b(?P<mon>JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\.?\s*(?P<d>\d{1,2})\b", s)
         if m:
             mon_map = {
                 "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
@@ -1050,12 +1164,45 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
             dd = int(m.group("d"))
             if mm <= 0:
                 return None
+            
+            # No year provided, need to infer
+            if period_start and period_end:
+                y = period_end.year  # Default to statement year
+                if period_start.year != period_end.year:
+                    # Statement crosses year boundary
+                    if mm == period_start.month:
+                        y = period_start.year
+                    elif mm == period_end.month:
+                        y = period_end.year
+                    elif mm > period_end.month:
+                        y = period_start.year
+                
+                try:
+                    return datetime(y, mm, dd).strftime("%Y-%m-%d")
+                except ValueError:
+                    return None
+            
+            # Fallback to default_year if no period available
             try:
                 return datetime(default_year, mm, dd).strftime("%Y-%m-%d")
             except ValueError:
                 return None
 
         return None
+
+    def _tx_in_tax_year(tx_date_iso: Optional[str]) -> bool:
+        """
+        For cross-year statements, keep only tx whose transaction_date year == tax_year.
+        For non-cross-year statements, always keep.
+        """
+        if not crosses_year:
+            return True
+        if not tx_date_iso:
+            return False
+        try:
+            return int(tx_date_iso[:4]) == tax_year_int
+        except Exception:
+            return False
 
     out: List[Dict] = []
     last_tx: Optional[Dict] = None
@@ -1074,23 +1221,26 @@ def parse_rows(table_rows: List[List[str | None]], section_config: Dict, source:
 
         desc = _cell(row, desc_idx).strip()
         if not desc:
-            # If no description, it's rarely a valid transaction row
             continue
 
         amt_val = _parse_amount(_cell(row, amt_idx))
         if amt_val is None:
-            # If it isn't a continuation row (handled above) and amount is missing, skip
             continue
 
         tx_date_raw = _cell(row, tx_date_idx)
         post_date_raw = _cell(row, post_date_idx)
 
-        tx_date_iso = _parse_date(tx_date_raw, default_year=year_int) if tx_date_idx is not None else None
-        post_date_iso = _parse_date(post_date_raw, default_year=year_int) if post_date_idx is not None else None
+        # IMPORTANT: Use transaction date for tax-year filtering, not posting date.
+        tx_date_iso = _parse_date_iso(tx_date_raw, default_year=tax_year_int) if tx_date_idx is not None else None
 
         # If we expect a transaction date column but couldn't parse it, skip (prevents garbage rows)
         if tx_date_idx is not None and not tx_date_iso:
             continue
+
+        if not _tx_in_tax_year(tx_date_iso):
+            continue
+
+        post_date_iso = _parse_date_iso(post_date_raw, default_year=tax_year_int) if post_date_idx is not None else None
 
         tx: Dict[str, object] = {
             "transaction_date": tx_date_iso,
@@ -1288,6 +1438,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
     skip_indices = set(profile.get("skip_pages_by_index", []) or [])
     header_anchor = profile.get("page_header_anchor", None)
     source_name = profile.get("bank_name", bank)
+    statement_period = None
 
     # Track sections found on this statement (kept for potential future validation)
     sections_map = {section["section_name"]: [] for section in sections}
@@ -1303,11 +1454,35 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                 left_margin = 0.0
                 if header_anchor:
                     try:
-                        header_area = page.crop((0, 0, page.width, page.height * 0.15))
+                        header_area = page.crop((0, 0, page.width, page.height * 0.2)) # top 20% of the page
+                        
+                        # --- Validate header anchor presence with flexible pattern ---
                         pattern = r'\s+'.join(re.escape(word) for word in header_anchor.split())
                         anchors = header_area.search(pattern, flags=re.IGNORECASE)
                         if not anchors:
                             continue
+                        
+                        # if debug_mode:
+                        #     debug_visualize_search_area(page, (0, 0, page.width, page.height * 0.15), action="save", filename=f"page_{page_num+1}_header_anchor_search_area.png")
+                        
+                        # --- Extract statement period & statement year ---
+                        if not statement_period:
+                            header_area_text = header_area.extract_text() or ""
+                            statement_period = detect_statement_period(header_area_text)
+                            # Validate detected period against tax_year if provided
+                            if tax_year and statement_period:
+                                statement_year = int(statement_period["statement_year"])
+                                start_dt = statement_period.get("start")
+                                end_dt = statement_period.get("end")
+                                crosses_year = bool(start_dt and end_dt and start_dt.year != end_dt.year)
+                                valid_statement = (statement_year == tax_year) or (crosses_year and (statement_year == tax_year - 1 or statement_year == tax_year + 1))
+                                # If the statement period year doesn't match the provided tax year (considering cross-year statements), skip processing this PDF
+                                if not valid_statement:
+                                    display_period = f"{statement_period['start'].strftime('%Y-%m-%d') if statement_period.get('start') else 'Unknown'} to {statement_period['end'].strftime('%Y-%m-%d') if statement_period.get('end') else 'Unknown'}"
+                                    notify(f"Skipping '{pdf_path.name}': Statement period year {statement_year} does not match provided tax year {tax_year}. Detected period: {display_period}", "warning")
+                                    return []
+                            
+                        # --- Determine left margin from header anchor position for better alignment of section header search ---
                         left_margin = float(anchors[0].get("x0", 0.0) or 0.0)
                     except Exception:
                         anchors = []
@@ -1338,7 +1513,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
 
                 page_section_positions.sort(key=lambda x: x["top"])
 
-                # 3) For each found section, compute bounds, crop, extract, validate, parse
+                # 3) For each found section, compute bounds, crop, extract, validate, and parse transactions
                 for i, item in enumerate(page_section_positions):
                     section = item["section"]
 
@@ -1379,6 +1554,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                         continue
                     
                     # Gate 2: Get precise table bounds based on text anchors and lines
+                    table_edges = None
                     table_edges = get_table_edges(page, strip_bbox, section, source_name, footer_bbox=footer_bbox)
                     
                     if table_edges and table_edges.get("coords"):
@@ -1391,7 +1567,7 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                         rows_bbox = None
 
                     # Guard: invalid crop
-                    min_w_threshold, min_h_threshold = 50.0, 10.0
+                    min_w_threshold, min_h_threshold = 50.0, 7.0
                     if rows_bbox and (rows_bbox[2] - rows_bbox[0] < min_w_threshold or rows_bbox[3] - rows_bbox[1] < min_h_threshold):
                         continue
                     if right_x - left_x < min_w_threshold or bottom_y - top_y < min_h_threshold:
@@ -1447,7 +1623,13 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
 
                     # --- Parse & normalize rows ---
                     try:
-                        new_txs = parse_rows(table_rows, section, source=source_name, tax_year=str(tax_year or datetime.now().year), rows_only=bool(rows_bbox))
+                        new_txs = parse_rows(
+                            table_rows, 
+                            section, 
+                            source=source_name, 
+                            tax_year=str(tax_year or datetime.now().year), 
+                            statement_period=statement_period, 
+                            rows_only=bool(rows_bbox))
                     except Exception as e:
                         notify(
                             "Failed parsing section %s in %s (page %d): %s"

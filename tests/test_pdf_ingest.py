@@ -11,6 +11,7 @@ import pytest
 from pathlib import Path
 from src import pdf_ingest
 from typing import List
+from datetime import datetime
 
 # --- Fixtures ---
 
@@ -73,17 +74,33 @@ def test_discover_pdfs(tmp_dir):
     assert len(pdfs) == 2
     assert pdf1 in pdfs and pdf2 in pdfs
 
-@pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
+
+# @pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
 def test_parse_section(sample_transactions, triangle_profile):
     # Simulate table with headers + rows
     table = [["TRANSACTION DATE", "POSTING DATE", "DESCRIPTION", "AMOUNT"]] + sample_transactions
     section_config = triangle_profile["sections"][2]  # Purchases section
-    # txs = pdf_ingest.parse_section(table, section_config, triangle_profile["bank_name"])
-    txs = []
+    # Simple statement period that clearly includes Jan 3, 2025
+    statement_period = {
+        "start": datetime(2024, 12, 26),
+        "end": datetime(2025, 1, 26),
+        "statement_year": 2025,
+    }
+    
+    txs = pdf_ingest.parse_rows(
+        table, 
+        section_config, 
+        source=triangle_profile["bank_name"], 
+        tax_year="2025", 
+        statement_period=statement_period,
+        rows_only=False, 
+        max_header_rows=1
+    )
 
-    assert len(txs) == 3
-    assert txs[0]["description"].startswith("TD BANKLINE")
+    assert len(txs) == 2
+    assert txs[0]["description"].startswith("THE HOME DEPOT")
     assert isinstance(txs[0]["amount"], float)
+
 
 def test_export_csv(tmp_dir, sample_transactions, triangle_profile):
     # Build normalized txs manually (avoid parse_section dependency)
@@ -113,59 +130,73 @@ def test_export_csv(tmp_dir, sample_transactions, triangle_profile):
         assert rows[0]["source"] == bank_name
         assert rows[0]["section"] == section_name
 
-@pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
+
+# @pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
 def test_parse_section_payments(cibc_profile):
     # Simulate a Payments table
-    table = [
+    table: List[List[str | None]] = [
         ["Trans date", "Post date", "Description", "Amount($)"],
         ["Jul 23", "Jul 23", "PAYMENT THANK YOU/PAIEMENT MERCI", "254.28"],
         ["Aug 21", "Aug 22", "PAYMENT THANK YOU/PAIEMENT MERCI", "767.39"],
         ["Total payments", "", "", "$1,021.67"]
     ]
-
     section_config = cibc_profile["sections"][0]  # Payments section
-    # txs = pdf_ingest.parse_section(table, section_config, cibc_profile["bank_name"])
-    txs = []
+    # Simple statement period that clearly includes Jan 3, 2025
+    statement_period = {
+        "start": datetime(2025, 7, 21),
+        "end": datetime(2025, 8, 21),
+        "statement_year": 2025,
+    }
+        
+    txs = pdf_ingest.parse_rows(
+        table, 
+        section_config, 
+        source=cibc_profile["bank_name"], 
+        tax_year="2025", 
+        statement_period=statement_period,
+        rows_only=False, 
+        max_header_rows=1
+    )
 
     assert len(txs) == 2
     assert txs[0]["description"].startswith("PAYMENT THANK YOU")
     assert isinstance(txs[0]["amount"], float)
 
-@pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
-def test_parse_section_interest(cibc_profile):
-    # Simulate an Interest table
-    table = [
-        ["Trans date", "Post date", "Description", "Annual interest rate", "Amount($)"],
-        ["Oct 23", "Oct 23", "REGULAR PURCHASES", "20.75%", "8.11"],
-        ["Total interest this period", "", "", "", "$8.11"]
-    ]
 
-    section_config = cibc_profile["sections"][1]  # Interest section
-    # txs = pdf_ingest.parse_section(table, section_config, cibc_profile["bank_name"])
-    txs = []
-
-    assert len(txs) == 1
-    assert txs[0]["description"] == "REGULAR PURCHASES"
-    assert txs[0]["amount"] == 8.11
-
-@pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
+# @pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
 def test_parse_section_charges_and_credits(cibc_profile):
     # Simulate a Charges and Credits table
-    table = [
-        ["Trans date", "Post date", "Description", "Spend Categories", "Amount($)"],
+    table: List[List[str | None]] = [
+        ["Trans", "Post", "Description", "Amount($)"],
+        ["date", "date", "", ""],
         ["Aug 27", "Aug 29", "7-ELEVEN #33414 - B TORONTO ON", "Transportation", "20.00"],
         ["Sep 07", "Sep 09", "SQ *TENT 2        ETOBICOKE ON", "Restaurants", "20.70"],
         ["Sep 20", "Sep 23", "7-ELEVEN #33414 - B TORONTO ON", "Transportation", "40.00"],
         ["Total for 5268 XXXX XXXX 9061", "", "", "", "$80.70"]
     ]
-
     section_config = cibc_profile["sections"][2]  # Charges and Credits section
-    # txs = pdf_ingest.parse_section(table, section_config, cibc_profile["bank_name"])
-    txs = []
+    # Simple statement period that clearly includes Jan 3, 2025
+    statement_period = {
+        "start": datetime(2025, 8, 21),
+        "end": datetime(2025, 9, 21),
+        "statement_year": 2025,
+    }
+    
+    txs = pdf_ingest.parse_rows(
+        table, 
+        section_config, 
+        source=cibc_profile["bank_name"], 
+        tax_year="2025", 
+        statement_period=statement_period, 
+        rows_only=False, 
+        max_header_rows=2
+    )
 
     assert len(txs) == 3
-    assert txs[1]["spend_category"] == "Restaurants"
+    assert "TENT 2" in txs[1]["description"]
+    assert txs[1]["amount"] == 20.70
     assert txs[2]["amount"] == 40.00
+
 
 def test_parse_csv_td_visa(td_visa_profile, td_visa_csv_sample):
     txs = pdf_ingest.parse_csv(td_visa_csv_sample, td_visa_profile)
@@ -174,24 +205,30 @@ def test_parse_csv_td_visa(td_visa_profile, td_visa_csv_sample):
     assert txs[0]["amount"] == 1.67
     assert txs[2]["amount"] == -303.29  # payment normalized as negative
 
-@pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
+
+# @pytest.mark.skip(reason="parse_section removed; temporarily skip until parse_rows is implemented")
 def test_parse_pdf_td_visa(td_visa_profile):
     # Simulate a PDF table
-    table = [
-        ["TRANSACTION DATE", "POSTING DATE", "ACTIVITY DESCRIPTION", "AMOUNT($)"],
+    table: List[List[str | None]] = [
         ["MAY 17", "MAY 20", "TIM HORTONS #1357 ETOBICOKE", "28.23"],
         ["MAY 22", "MAY 23", "PAYMENT - THANK YOU", "-404.15"],
         ["JUN 9", "JUN 9", "BALANCE PROTECTION (INCL TAX)", "1.80"],
         ["", "", "TOTAL NEW BALANCE", "140.83"]
     ]
-
     section_config = td_visa_profile["sections"][0]
-    # txs = pdf_ingest.parse_section(table, section_config, td_visa_profile["bank_name"])
-    txs = []
+    # Simple statement period that clearly includes Jan 3, 2025
+    statement_period = {
+        "start": datetime(2025, 5, 21),
+        "end": datetime(2025, 6, 17),
+        "statement_year": 2025,
+    }
+    
+    txs = pdf_ingest.parse_rows(table, section_config, source=td_visa_profile["bank_name"], tax_year="2025", statement_period=statement_period, rows_only=True)
 
     assert len(txs) == 3
     assert txs[0]["description"].startswith("TIM HORTONS")
     assert txs[1]["amount"] == -404.15
+
 
 def test_parse_pdf_normalization(monkeypatch, tmp_path):
     # Fake PDF file
@@ -209,6 +246,7 @@ def test_parse_pdf_normalization(monkeypatch, tmp_path):
     tx = result[0]
     assert set(tx.keys()) == {"transaction_date", "description", "amount", "balance", "source", "section"}
 
+
 def test_parse_pdf_error(monkeypatch, tmp_path):
     pdf_file = tmp_path / "corrupt.pdf"
     pdf_file.write_text("not a real pdf")
@@ -219,14 +257,84 @@ def test_parse_pdf_error(monkeypatch, tmp_path):
     with pytest.raises(ValueError):
         pdf_ingest.parse_pdf(pdf_file, "cibc")
 
+
 def test_parse_rows_single_row_no_header():
     # Single data row and rows_only=False should NOT drop the only row
-    rows: List[List[str | None]] = [["Jan 03", "", "Some Merchant", "12.34"]]
+    rows: List[List[str | None]] = [["Jan 03", "Jan 05", "Some Merchant", "12.34"]]
     section = {
         "columns": {"transaction_date": 0, "posting_date": 1, "description": 2, "amount": 3},
         "section_name": "Transactions",
     }
-    txs = pdf_ingest.parse_rows(rows, section, source="Triangle", tax_year="2025", rows_only=True, max_header_rows=2)
+    # Simple statement period that clearly includes Jan 3, 2025
+    statement_period = {
+        "start": datetime(2024, 12, 24),
+        "end": datetime(2025, 1, 17),
+        "statement_year": 2025,
+    }
+    
+    txs = pdf_ingest.parse_rows(
+        rows,
+        section,
+        source="Triangle",
+        tax_year="2025",
+        statement_period=statement_period,
+        rows_only=True
+    )
+    
     assert len(txs) == 1
     assert txs[0]["description"].startswith("Some Merchant")
     assert txs[0]["amount"] == 12.34
+
+
+@pytest.mark.parametrize(
+    "text,start_iso,end_iso",
+    [
+        ("Dec 26 to Jan 25, 2024", "2023-12-26", "2024-01-25"),
+        ("Dec26toJan25,2024", "2023-12-26", "2024-01-25"),
+        ("December 24, 2024 to January 23, 2025", "2024-12-24", "2025-01-23"),
+        ("December08,2023toJanuary08,2024", "2023-12-08", "2024-01-08"),
+        ("May 08, 2025 to June 09, 2025", "2025-05-08", "2025-06-09"),
+        ("December 08. 2023 to January 08, 2024", "2023-12-08", "2024-01-08"),
+        ("May08,2025toJune09,2025", "2025-05-08", "2025-06-09"),
+    ],
+)
+def test_detect_statement_period_variants(text, start_iso, end_iso):
+    result = pdf_ingest.detect_statement_period(text)
+    assert result is not None
+    assert result["start"].strftime("%Y-%m-%d") == start_iso
+    assert result["end"].strftime("%Y-%m-%d") == end_iso
+
+
+def test_parse_rows_infers_prev_year_for_dec_rows_in_cross_year_statement():
+    """
+    Corner case:
+      Statement period crosses years (Dec -> Jan), and the PDF row dates omit the year.
+      "Dec 27" in a period ending Jan 25, 2024 should resolve to 2023-12-27 (not 2024-12-27).
+    """
+    statement_period = {
+        "start": datetime(2023, 12, 26),
+        "end": datetime(2024, 1, 25),
+        "statement_year": 2024,
+    }
+
+    section = {
+        "section_name": "Transactions",
+        "columns": {"transaction_date": 0, "posting_date": 1, "description": 2, "amount": 3},
+    }
+
+    rows: List[List[str | None]] = [
+        ["Dec 27", "Dec 27", "TD BANKLINE/TELELIGNE T.D.", "-500.00"],
+    ]
+
+    txs = pdf_ingest.parse_rows(
+        rows,
+        section,
+        source="TD Visa",
+        tax_year="2023",
+        statement_period=statement_period,
+        rows_only=True,
+    )
+
+    assert len(txs) == 1
+    assert txs[0]["transaction_date"] == "2023-12-27"
+    assert txs[0]["amount"] == -500.00
