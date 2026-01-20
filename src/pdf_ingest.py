@@ -791,6 +791,8 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
             sorted_matches = sorted(matches, key=lambda m: m["x0"])
             # Use x0 for the breakpoints
             header_bbox["vertical_lines_bp"] = [m["x0"] for m in sorted_matches]
+            if bank_name == "TD Visa":
+                header_bbox["vertical_lines_bp"][1:-1] = [bp - 0.6 for bp in header_bbox["vertical_lines_bp"][1:-1]]
             # Apply overrides
             header_bbox["vertical_lines_bp"][0] = min(sorted_matches[0]["x0"], left)
             # Shift last column start left by 80% of the header label width
