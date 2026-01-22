@@ -69,6 +69,18 @@ def main():
             notify(f"Error ingesting {file_path}: {e}", level="error")
             sys.exit(1)
     
+    # Ensure chronological order across multiple sources before running the pipeline
+    def _tx_date_key(tx):
+        date_val = tx.get("Date") or tx.get("date") or tx.get("transaction_date")
+        if isinstance(date_val, datetime):
+            return date_val
+        try:
+            return datetime.fromisoformat(str(date_val))
+        except Exception:
+            return str(date_val or "")
+
+    transactions.sort(key=_tx_date_key)
+    
     # Define output path
     output_dir = Path("output") / str(args.year)
     output_dir.mkdir(parents=True, exist_ok=True)
