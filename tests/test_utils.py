@@ -37,10 +37,10 @@ def test_setup_paths_no_dir(tmp_path):
         setup_paths(2099)
 
 def test_setup_paths_no_csv(tmp_path):
-    year_dir = tmp_path / "2025"
+    year_dir = tmp_path / "2023"
     year_dir.mkdir()
     with pytest.raises(FileNotFoundError):
-        setup_paths(2025)
+        setup_paths(2023)
 
 def test_notify_unicode_fallback(monkeypatch):
     """
