@@ -155,3 +155,85 @@ def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles
     # --- No match found ---
     available = [f.stem for f in profiles_dir.glob("*.json") if f.name != schema_filename]
     raise FileNotFoundError(f"No profile found for bank '{bank}'. Available profiles: {', '.join(available)}")
+
+
+def normalize_tx_to_canonical_shape(tx: Dict[str, Any], *, source_type: str) -> Dict[str, Any]:
+    """
+    Normalize diverse transaction dicts into the canonical raw_tx shape used by the pipeline:
+        {
+            "Date": "YYYY-MM-DD" | None,
+            "Description": str,
+            "Debit": float,      # >= 0.0
+            "Credit": float,     # >= 0.0
+            "Balance": float | None,
+            "source": "bank_account" | "credit_card" | ...
+        }
+
+    Input tx may be:
+      - Account CSV style: {"Date", "Description", "Debit", "Credit", "Balance?", ...}
+      - Card-style: {"transaction_date", "description", "amount", "balance?", ...}
+    """
+    # 1) Date
+    date_val = (
+        tx.get("Date")
+        or tx.get("date")
+        or tx.get("transaction_date")
+        or tx.get("posting_date")
+    )
+
+    # 2) Description
+    desc_val = (
+        tx.get("Description")
+        or tx.get("description")
+        or ""
+    )
+
+    # 3) Debit/Credit / Amount
+    debit_raw = tx.get("Debit")
+    credit_raw = tx.get("Credit")
+
+    # If explicit Debit/Credit provided, prefer them
+    if debit_raw is not None or credit_raw is not None:
+        try:
+            debit = float(debit_raw or 0.0)
+        except (TypeError, ValueError):
+            debit = 0.0
+        try:
+            credit = float(credit_raw or 0.0)
+        except (TypeError, ValueError):
+            credit = 0.0
+    else:
+        # Fallback to signed amount (card-style)
+        amt_raw = tx.get("amount", 0.0)
+        try:
+            amt = float(amt_raw or 0.0)
+        except (TypeError, ValueError):
+            amt = 0.0
+
+        if amt > 0:
+            debit = amt
+            credit = 0.0
+        elif amt < 0:
+            debit = 0.0
+            credit = -amt
+        else:
+            debit = credit = 0.0
+
+    # 4) Balance
+    balance_raw = tx.get("Balance")
+    if balance_raw is None:
+        balance_raw = tx.get("balance")
+
+    try:
+        balance = float(balance_raw) if balance_raw is not None else None
+    except (TypeError, ValueError):
+        balance = None
+
+    return {
+        "Date": date_val,
+        "Description": str(desc_val),
+        "Debit": float(debit),
+        "Credit": float(credit),
+        "Balance": balance,
+        "source": source_type,
+    }
