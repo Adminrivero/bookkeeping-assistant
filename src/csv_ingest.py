@@ -6,10 +6,10 @@ CSV ingestion pipeline for bank statements.
 This module handles CSV inputs, validates them against the bank profile config,
 and normalizes transactions into a unified dict structure consistent with PDF ingestion.
 """
-
 import csv
 import logging
 from datetime import datetime
+from src.utils import normalize_tx_to_canonical_shape
 
 
 def parse_csv(file_path, profile):
@@ -87,4 +87,12 @@ def parse_csv(file_path, profile):
                 logging.warning("Skipping malformed row: %s | Error: %s", row, e)
 
     logging.info("Parsed %d transactions from CSV for %s", len(transactions), profile["bank_name"])
-    return transactions
+    
+    # Normalize to canonical raw_tx shape
+    source_type = profile.get("source_type", "credit_card")
+    normalized = [
+        normalize_tx_to_canonical_shape(tx, source_type=source_type)
+        for tx in transactions
+    ]
+    
+    return normalized

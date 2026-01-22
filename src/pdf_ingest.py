@@ -13,7 +13,7 @@ import tempfile
 import webbrowser, pathlib
 from typing import List, Dict, Optional, Literal
 from datetime import datetime
-from src.utils import load_bank_profile, notify, debug_mode, time_it
+from src.utils import load_bank_profile, notify, debug_mode, time_it, normalize_tx_to_canonical_shape
 from collections import defaultdict
 
 
@@ -1692,7 +1692,15 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
         notify("Failed to parse PDF %s: %s" % (pdf_path, e), "error")
 
     notify("Extracted %d transactions from %s" % (len(transactions), pdf_path.name), "info")
-    return transactions
+    
+    # Normalize to canonical raw_tx shape
+    source_type = "credit_card"
+    normalized = [
+        normalize_tx_to_canonical_shape(tx, source_type=source_type)
+        for tx in transactions
+    ]
+    
+    return normalized
 
 
 def parse_csv(file_path: pathlib.Path, profile: dict):
