@@ -26,7 +26,17 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
 
     # Always map base fields
     row["Date"] = raw_tx.get("Date")
-    row["Item"] = raw_tx.get("Description")
+    
+    # Distinguish credit-card vs bank-account visually in Item text
+    description = raw_tx.get("Description", "")
+    source = raw_tx.get("source")
+    is_credit_card_source = source == "credit_card"
+
+    if is_credit_card_source:
+        row["Item"] = f"{description} (Credit-Card)"
+        row["credit_card_source"] = True
+    else:
+        row["Item"] = description
 
     # Handle dual-entry mapping
     dual_entry = classification.get("dual_entry")
@@ -58,7 +68,12 @@ def map_transaction_to_row(raw_tx: dict, classification: dict, row_idx: int) -> 
     
     # Notes column for ignored transactions
     if classification["transaction_type"] == "IGNORE_TRANSACTION":
-        row["Notes"] = f"Ignored transaction: {raw_tx.get('Description', 'item') + ' -> ' + str(raw_tx.get('Debit') or raw_tx.get('Credit'))}"
+        row["Notes"] = (
+            "Ignored transaction: "
+            + raw_tx.get("Description", "item")
+            + " -> "
+            + str(raw_tx.get("Debit") or raw_tx.get("Credit"))
+        )
         row["ignore"] = True
 
     # TOTAL column formula will be inserted by exporter (formula_template)
