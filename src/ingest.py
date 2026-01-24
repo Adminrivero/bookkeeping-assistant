@@ -20,6 +20,9 @@ def load_csv(path: str) -> List[Dict]:
     """
     Load transactions from a CSV file and normalize them.
     Detects whether the file has headers or not.
+    
+    Returns a canonical structure:
+        {"Date": ..., "Description": ..., "Debit": float, "Credit": float, "Balance": float|None, "source": "bank_account"}
     """
     transactions = []
     with open(path, newline='', encoding="utf-8") as f:
@@ -39,13 +42,22 @@ def load_csv(path: str) -> List[Dict]:
         for row in reader:
             tx = normalize_row(row)
             if tx:  # skip empty or malformed rows
+                # Ensure Balance exists
+                if "Balance" not in tx:
+                    tx["Balance"] = None
+                # Tag source
+                tx["source"] = "bank_account"
                 transactions.append(tx)
+                
     return transactions
 
 def normalize_row(row: Dict[str, str]) -> Dict[str, Union[str, float, None]]:
     """
     Normalize a row into expected format.
     Handles both separate Debit/Credit columns and single Amount column.
+    
+    Returns:
+        {"Date", "Description", "Debit", "Credit"} (Balance & source added in load_csv)
     """
     date = parse_date(row.get("Date"))
     desc = clean_description(row.get("Description"))

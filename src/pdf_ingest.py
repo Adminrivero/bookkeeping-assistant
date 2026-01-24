@@ -13,7 +13,7 @@ import tempfile
 import webbrowser, pathlib
 from typing import List, Dict, Optional, Literal
 from datetime import datetime
-from src.utils import load_bank_profile, notify, debug_mode, time_it
+from src.utils import load_bank_profile, notify, debug_mode, time_it, normalize_tx_to_canonical_shape
 from collections import defaultdict
 
 
@@ -437,7 +437,7 @@ def get_section_header_bbox(page, match_text, crop_bbox = None, left_margin: Opt
     return None
 
 
-def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=None):
+def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=None, proximity_threshold: float = 5.0):
     """
     Finds the bounding box of a section footer by searching for footer_text
     within a defined search area and validating its position relative to the header.
@@ -468,6 +468,14 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
     if not matches:
         return None
     
+    # Tighten vertical slice to the actual text bounding box of the match to reduce false positives in line proximity
+    candidate_matche = matches[-1]
+    text_bottom = candidate_matche.get("bottom", 0)
+    new_area_bbox = (search_area_bbox[0], search_area_bbox[1], search_area_bbox[2], text_bottom + 5)
+    search_strip = page.crop(new_area_bbox)
+    # if debug_mode:
+    #     debug_visualize_search_area(page, new_area_bbox, action="save", filename=f"get_table_footer_bbox-debug_search_area_2.png")
+    
     # Get horizontal lines in the search area to validate proximity to footer text
     horizontal_lines = _extract_horizontal_lines(search_strip, ascending=False)
     
@@ -489,8 +497,8 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
             line_x1 = l[-1]["x1"]
             
             # 1. Vertical Proximity Gate
-            # Allow the line to be up to 5 points above the text and up to 2 points 'inside' the text box
-            is_vertically_aligned = (text_top - 5) <= line_top <= (text_top + 2)
+            # Allow the line to be up to `proximity_threshold` points above the text and up to 2 points 'inside' the text box
+            is_vertically_aligned = (text_top - proximity_threshold) <= line_top <= (text_top + 2)
             
             # Ensure the line is physically above the text midline (restrict it to a 5-points range)
             # text_midline = (text_top + text_bottom) / 2
@@ -523,7 +531,7 @@ def get_table_footer_bbox(page, footer_text, search_area_bbox, header_x_range=No
     return None
 
 
-def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=None) -> bool:
+def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=None, header_buffer=60) -> bool:
     """
     Validates table presence using Structural Validation and Regex-based 
     Content Validation to handle multi-line headers and encoding artifacts.
@@ -566,13 +574,15 @@ def validate_table_presence(page, strip_bbox, section, bank_name, footer_bbox=No
         return has_structure
 
     # Dynamic header zone estimation
-    header_buffer = 60
     header_zone_bbox = (
         strip_bbox[0],
         strip_bbox[1],
         strip_bbox[2],
         min(strip_bbox[1] + header_buffer, strip_bbox[3])
     )
+    
+    # if debug_mode:
+    #     debug_visualize_search_area(page, header_zone_bbox, action="save")
     
     if bank_name == "TD Visa":
         # Find significant rectangle that could be enclosing the header and adjust the header zone accordingly
@@ -652,9 +662,12 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
     }
 
     # Dynamic Header Zone Estimation
-    header_buffer = 50
+    header_buffer = 100 if bank_name == "TD Visa" else 50
     header_bottom = min(bottom, top + header_buffer)
     header_zone_bbox = (left, top, right, header_bottom)
+    
+    # if debug_mode:
+    #     debug_visualize_search_area(page, header_zone_bbox, action="save", filename=f"get_table_header_bbox-debug_initial_header_zone.png")
     
     if bank_name == "Triangle MasterCard":
         # For Triangle MC, look for top horizontal line to define the header zone
@@ -676,18 +689,48 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
         
     elif bank_name == "TD Visa":
         # For TD Visa, find rectangle that encloses the header labels and adjust the header zone accordingly
-        td_crop = page.crop(search_area_bbox)
-        # all_rects = [r for r in td_crop.rects if (r["x1"] - r["x0"]) > 1] 
-        td_rects = [r for r in td_crop.rects if (r["x1"] - r["x0"]) > 100 and (r["y1"] - r["y0"]) > 10]
-        if td_rects:
-            # Assume the top-most large rectangle is the header box
-            td_header_rect = min(td_rects, key=lambda r: r["top"])
-            header_zone_bbox = (
-                left,
-                td_header_rect["top"] - padding,  # small buffer above the rect
-                right,
-                td_header_rect["bottom"] + padding  # small buffer below the rect
-            )
+        new_area_bbox = (search_area_bbox[0], search_area_bbox[1], search_area_bbox[2] + 2, search_area_bbox[3])
+        td_crop = page.crop(new_area_bbox)
+        td_lines = _extract_horizontal_lines(td_crop, ascending=True)
+        header_lines = [l for l in td_lines if (abs(l[0]["bottom"] - l[0]["top"]) < 3) and (l[0]["bottom"] <= header_bottom)]
+        
+        if header_lines:
+            if len(header_lines) == 1:
+                # If only one horizontal line is found, assume the header is above that line
+                header_line = header_lines[0]
+                
+                header_zone_bbox = (
+                    left,
+                    top,
+                    right,
+                    header_line[0]["top"] + padding  # small buffer below the line
+                )
+                
+                header_bbox["line_bbox"] = {
+                    "x0": header_line[0]["x0"],
+                    "top": header_line[0]["top"],
+                    "x1": header_line[-1]["x1"],
+                    "bottom": header_line[0]["bottom"]
+                }
+                
+            elif len(header_lines) > 1:    
+                # If multiple horizontal lines are found, assume the header is enclosed in a rectangle defined by the top-most and bottom-most lines
+                header_top_line = header_lines[0]
+                header_bottom_line = header_lines[-1]
+                
+                header_zone_bbox = (
+                    left,
+                    header_top_line[0]["top"] - padding,  # small buffer above the rect
+                    right,
+                    header_bottom_line[0]["bottom"] + padding  # small buffer below the rect
+                )
+                
+                header_bbox["line_bbox"] = {
+                    "x0": header_bottom_line[0]["x0"],
+                    "top": header_bottom_line[0]["top"],
+                    "x1": header_bottom_line[-1]["x1"],
+                    "bottom": header_bottom_line[0]["bottom"]
+                }
     
     header_crop = page.crop(header_zone_bbox)
     
@@ -748,6 +791,8 @@ def get_table_header_bbox(page, search_area_bbox, section, bank_name, padding: f
             sorted_matches = sorted(matches, key=lambda m: m["x0"])
             # Use x0 for the breakpoints
             header_bbox["vertical_lines_bp"] = [m["x0"] for m in sorted_matches]
+            if bank_name == "TD Visa":
+                header_bbox["vertical_lines_bp"][1:-1] = [bp - 0.6 for bp in header_bbox["vertical_lines_bp"][1:-1]]
             # Apply overrides
             header_bbox["vertical_lines_bp"][0] = min(sorted_matches[0]["x0"], left)
             # Shift last column start left by 80% of the header label width
@@ -1532,7 +1577,8 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                     if footer_marker:
                         search_area_bbox = (0.0, start_y, float(page.width), max_y)
                         header_x_range = (float(item["left"]), float(item["right"]))
-                        footer_bbox = get_table_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range)
+                        proximity = 15.0 if source_name == "TD Visa" else 5.0
+                        footer_bbox = get_table_footer_bbox(page, footer_marker, search_area_bbox, header_x_range=header_x_range, proximity_threshold=proximity)
                         if footer_bbox and float(footer_bbox["text_bbox"]["top"]) > start_y:
                             # end_y = float(footer_bbox["text_bbox"]["top"])
                             end_y = float(footer_bbox["text_bbox"]["bottom"]) + 5  # small padding below footer
@@ -1543,14 +1589,15 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
                     
                     # --- Table: validation & refined edge detection ---
                     strip_bbox = (
-                        float(footer_bbox["line_bbox"]["x0"]) if footer_bbox and footer_bbox.get("line_bbox") else 0.0,
+                        float(footer_bbox["line_bbox"]["x0"] - 2) if footer_bbox and footer_bbox.get("line_bbox") else 0.0,
                         float(start_y),
-                        float(footer_bbox["line_bbox"]["x1"]) if footer_bbox and footer_bbox.get("line_bbox") else float(page.width),
+                        float(footer_bbox["line_bbox"]["x1"] + 2) if footer_bbox and footer_bbox.get("line_bbox") else float(page.width),
                         float(end_y),
                     )
                     
                     # Gate 1: Ensure the area actually looks like a table for this bank statement
-                    if not validate_table_presence(page, strip_bbox, section, source_name, footer_bbox=footer_bbox):
+                    header_vertical_range = 100 if source_name == "TD Visa" else 60
+                    if not validate_table_presence(page, strip_bbox, section, source_name, footer_bbox=footer_bbox, header_buffer=header_vertical_range):
                         continue
                     
                     # Gate 2: Get precise table bounds based on text anchors and lines
@@ -1645,7 +1692,15 @@ def parse_pdf(pdf_path: pathlib.Path, bank: str, tax_year: Optional[int] = None)
         notify("Failed to parse PDF %s: %s" % (pdf_path, e), "error")
 
     notify("Extracted %d transactions from %s" % (len(transactions), pdf_path.name), "info")
-    return transactions
+    
+    # Normalize to canonical raw_tx shape
+    source_type = "credit_card"
+    normalized = [
+        normalize_tx_to_canonical_shape(tx, source_type=source_type)
+        for tx in transactions
+    ]
+    
+    return normalized
 
 
 def parse_csv(file_path: pathlib.Path, profile: dict):

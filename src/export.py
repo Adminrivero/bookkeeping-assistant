@@ -4,7 +4,6 @@ export.py
 Handles exporting classified transactions into a formatted Excel workbook
 based on the schema defined in spreadsheet_schema.py.
 """
-
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -30,6 +29,9 @@ class SpreadsheetExporter:
             left=Side(border_style="thin", color="000000"),
             right=Side(border_style="thin", color="000000")
         )
+        # Font style for credit-card-sourced transactions
+        self.credit_card_font = Font(color="FF0000")  # red
+
 
     def build_headers(self):
         """Create header row using schema definitions."""
@@ -46,12 +48,15 @@ class SpreadsheetExporter:
             double = Side(border_style="double", color="000000")
             cell.border = Border(top=double, bottom=thick, left=thin, right=thin)
 
+
     def write_transaction(self, row_idx: int, transaction: dict):
         """
         Write a single classified transaction into the spreadsheet.
         transaction: dict with keys matching schema column names.
         """
         schema = get_schema()
+        is_credit_card_source = bool(transaction.get("credit_card_source"))
+        
         for idx, col in enumerate(schema, start=1):
             value = transaction.get(col.name)
             cell = self.ws.cell(row=row_idx, column=idx)
@@ -61,18 +66,32 @@ class SpreadsheetExporter:
                 cell.value = formula # type: ignore
             else:
                 cell.value = value
+                
             # Apply number format based on data_format
             if col.data_format["number"]["category"] == "Currency":
                 cell.number_format = '$#,##0.00'
             elif col.data_format["number"]["category"] == "Date":
                 cell.number_format = 'YYYY-MM-DD'
+                
             # Apply highlighting and borders if manual review flag is set
             if transaction.get("highlight"):
                 cell.fill = self.highlight_fill
             if transaction.get("ignore"):
                 cell.fill = self.ignore_fill
+            
+            # Credit-card source visual cue (red font)
+            if is_credit_card_source:
+                # Merge with any existing style by copying current font and changing color
+                cell.font = Font(
+                    name=cell.font.name,
+                    size=cell.font.size,
+                    bold=cell.font.bold,
+                    italic=cell.font.italic,
+                    color=self.credit_card_font.color,
+                )
                     
             cell.border = self.thin_border
+
 
     def finalize_totals_row(self, start_row: int, end_row: int):
         """Add totals row at the bottom for numeric columns (C through AA)."""
@@ -97,6 +116,7 @@ class SpreadsheetExporter:
         for idx in range(1, len(schema) + 1):
             cell = self.ws.cell(row=totals_row, column=idx)
             cell.border = self.thin_border
+
 
     def save(self, filename: str):
         """Save the workbook to disk."""
