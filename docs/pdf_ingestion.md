@@ -31,20 +31,32 @@ data/
 Run the assistant by specifying the year and one or more bank profiles:
 
 ```bash
-python project.py -y 2025 -b triangle cibc
+python project.py --year 2025 --bank triangle cibc
 ```
 
-This will:
+### Common Flags:
+- `-y`, `--year` *(int)*: Target financial year (e.g., `2025`).
+- `-b`, `--bank` *(string...)*: List of bank profile IDs matching filenames in `config/bank_profiles/`.
+- `-r`, `--rules` *(path)*: Path to allocation rules JSON (default: `config/allocation_rules.json`).
+- `-l`, `--log`: Enable detailed logging output.
+- `-q`, `--no-progress`: Disable progress bars and verbose status messages.
 
-- Ingest root account CSVs in `data/2025/`.
-- Ingest all statements (CSV or PDF) under `data/2025/triangle/` and `data/2025/cibc/`.
-- Normalize transactions and export them to Excel.
+---
 
-Output file:
+## 🔍 Debugging & Table Extraction
 
-```bash
-output/2025/bookkeeping_2025.xlsx
-```
+Parsing credit card PDFs can be challenging. The engine includes several debugging tools:
+
+### Automatic Filename Normalization
+The system automatically renames PDF files to `<bank>-<month>.pdf` by reading the "Statement date" from the first page.
+
+### Visual Debugging
+When calibration is needed, `src/pdf_ingest.py` can generate visual crops:
+- Set `VSCODE_DEBUGGING=1` in your environment or attach a debugger to enable verbose parsing.
+- Visual crops and search area markers are saved to the `.pydebug/` directory.
+
+### Table Edge Detection
+The system uses `get_table_edges()` to compute explicit vertical lines for complex layouts, which are then injected into `table_settings` for `pdfplumber`.
 
 ---
 

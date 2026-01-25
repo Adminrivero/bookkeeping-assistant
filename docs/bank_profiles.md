@@ -13,8 +13,10 @@ Each bank profile is a JSON file stored in:
 
 Profiles describe:
 - **Sections** in PDF statements (e.g., Purchases, Payments, Interest)
+- **Table Settings** for PDF parsing (tolerances, vertical/horizontal strategies)
 - **Column mappings** (which field is at which index)
-- **Footer rules** (skip totals, balances)
+- **Header validation** (labels to match for robust table discovery)
+- **Footer rules** (skip totals, balances via anchor text)
 - **Optional CSV format rules** (for banks that export CSVs directly)
 
 All profiles are validated against `config/profile_template.json` (JSON schema).
@@ -60,16 +62,24 @@ All profiles are validated against `config/profile_template.json` (JSON schema).
 ```json
 {
   "bank_name": "Triangle MasterCard",
+  "skip_pages_by_index": [0],
+  "page_header_anchor": "Details of your account summary",
+  "table_settings": {
+    "vertical_strategy": "explicit",
+    "horizontal_strategy": "text"
+  },
   "sections": [
     {
       "section_name": "Purchases",
       "match_text": "Purchases",
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
       "columns": {
         "transaction_date": 0,
         "posting_date": 1,
         "description": 2,
         "amount": 3
       },
+      "footer_row_text": "Total purchases",
       "skip_footer_rows": true
     }
   ]
@@ -83,13 +93,14 @@ All profiles are validated against `config/profile_template.json` (JSON schema).
   "bank_name": "CIBC Costco MasterCard",
   "sections": [
     {
-      "section_name": "Payments",
-      "match_text": "Your payments",
+      "section_name": "Charges and Credits",
+      "match_text": "Your new charges and credits",
       "columns": {
         "transaction_date": 0,
         "posting_date": 1,
         "description": 2,
-        "amount": 3
+        "spend_category": 3,
+        "amount": 4
       },
       "skip_footer_rows": true
     }

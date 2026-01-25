@@ -26,18 +26,13 @@ Config
 `src/pdf_ingest.py`
 - PDF statement parsing for credit card statements.
 - Discovers PDFs, normalizes filenames, extracts tables, and normalizes transactions using bank profiles.
-- Header validation and structural checks (via `validate_table_structure`) are used to identify transaction tables robustly.
-- Table edge detection helpers:
-  - `get_header_bbox`, `get_label_edge`, `get_table_edges` help compute crop areas and explicit vertical lines.
-  - `get_table_edges()` can return explicit vertical lines which are injected into `table_settings["explicit_vertical_lines"]` when `vertical_strategy` == `"explicit"`.
-- Debugging:
-  - `debug_parse_pdf()` provides detailed extraction, visual debug artifacts, and printouts to fine-tune heuristics.
-  - Debug mode can be enabled three ways:
-    - Pass `debug=True` to `parse_pdf()` or `ingest_year()`.
-    - Set environment var `VSCODE_DEBUGGING=1` (auto-detected).
-    - Attach a debugger (auto-detected via `sys.gettrace()`).
-  - There is also a legacy `debug_parse_pdf_deprecated()` retained for reference.
-- Uses `src.utils.notify()` for consistent messaging (console vs logging).
+- **Robustness Features**:
+  - Header validation and structural checks (via `validate_table_structure`) are used to identify transaction tables.
+  - **Table edge detection**: `get_header_bbox`, `get_label_edge`, and `get_table_edges` compute crop areas and vertical lines.
+  - **Explicit Vertical Lines**: Injected into `table_settings` when `vertical_strategy` is `"explicit"` to handle tight columns.
+- **Debugging**:
+  - `debug_parse_pdf()` provides detailed extraction, visual debug artifacts (in `.pydebug/`), and printouts.
+  - Debug mode is auto-detected via `VSCODE_DEBUGGING` or `sys.gettrace()`.
 
 `src/classify.py`
 - Core rule engine.
@@ -59,14 +54,11 @@ Config
 
 Developer notes
 - Logging vs notify: prefer `src.utils.notify()` to keep output consistent across CLI and programmatic runs.
-- Debugging: to quickly enter debug mode for PDF parsing:
-  - Export `VSCODE_DEBUGGING=1` and run the tool (auto-detected).
-  - Or attach your debugger (tools that set `sys.gettrace()` will auto-enable debug).
-  - Programmatically call `ingest_year(year, bank, debug=True)` to force debug parsing.
-- Bank profile validation: `load_bank_profile` validates profiles against `profile_template.json` — ensure schemas stay in sync.
-- PDF parsing: profiles map `match_text`, `header_labels`, and per-section `columns` (indexes). Adjust `table_settings` (tolerances, vertical_strategy) and `header_labels` if bank statement layout changes.
-- When using `vertical_strategy: "explicit"`, `pdf_ingest` may compute and inject `explicit_vertical_lines` to improve column alignment.
-- Keep rules and profiles under version control and add tests for any parsing edge-cases discovered in live statements.
+- Debugging: 
+  - Visual crops and search strips are saved to `.pydebug/`.
+  - Enable via `VSCODE_DEBUGGING=1` or by attaching a debugger.
+- Bank profile validation: `load_bank_profile` validates profiles against `profile_template.json`.
+- PDF parsing: supports `table_settings` (from `pdfplumber`), `header_labels`, and `footer_row_text` for precise extraction.
 
 Quickstart
 - Ingest + classify + export for 2024 with logging:

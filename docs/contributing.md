@@ -57,8 +57,13 @@ This guide explains workflow, branching, commit hygiene, and pull requests.
 ## Branching Strategy
 
 - `main` → stable, production-ready code
+- `docs` → general documentation improvements
 - `feature/*` → new features or fixes
 - `hotfix/*` → urgent fixes
+
+### Documentation Workflow
+- For minor doc fixes, you can commit directly to the `docs` branch.
+- For major documentation overhauls (like version updates), create a temporary branch from `docs` (e.g., `docs/v2-update`) and open a PR back to `docs`.
 
 ---
 
