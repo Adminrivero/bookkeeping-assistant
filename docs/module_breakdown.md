@@ -26,7 +26,13 @@ Config
 `src/pdf_ingest.py`
 - PDF statement parsing for credit card statements.
 - Discovers PDFs, normalizes filenames, extracts tables, and normalizes transactions using bank profiles.
-- Note: This module should use `src.utils.notify()` for output consistency (see Developer notes).
+- **Robustness Features**:
+  - Header validation and structural checks (via `validate_table_structure`) are used to identify transaction tables.
+  - **Table edge detection**: `get_header_bbox`, `get_label_edge`, and `get_table_edges` compute crop areas and vertical lines.
+  - **Explicit Vertical Lines**: Injected into `table_settings` when `vertical_strategy` is `"explicit"` to handle tight columns.
+- **Debugging**:
+  - `debug_parse_pdf()` provides detailed extraction, visual debug artifacts (in `.pydebug/`), and printouts.
+  - Debug mode is auto-detected via `VSCODE_DEBUGGING` or `sys.gettrace()`.
 
 `src/classify.py`
 - Core rule engine.
@@ -47,10 +53,12 @@ Config
 - Uses pytest; run with `pytest tests/`.
 
 Developer notes
-- Logging vs notify: prefer `src.utils.notify()` (prints or uses python logging when `use_logging` is enabled) to keep output consistent across CLI and programmatic runs.
-- Bank profile validation: `load_bank_profile` validates profiles against `profile_template.json` — ensure schemas stay in sync.
-- PDF parsing: profiles map `match_text` and per-section `columns` (indexes) — adjust profiles if bank statement layout changes.
-- CSV ingest: expected top-level CSVs in `data/<year>/`; missing files raise helpful errors via utils functions.
+- Logging vs notify: prefer `src.utils.notify()` to keep output consistent across CLI and programmatic runs.
+- Debugging: 
+  - Visual crops and search strips are saved to `.pydebug/`.
+  - Enable via `VSCODE_DEBUGGING=1` or by attaching a debugger.
+- Bank profile validation: `load_bank_profile` validates profiles against `profile_template.json`.
+- PDF parsing: supports `table_settings` (from `pdfplumber`), `header_labels`, and `footer_row_text` for precise extraction.
 
 Quickstart
 - Ingest + classify + export for 2024 with logging:
