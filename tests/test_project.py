@@ -56,7 +56,7 @@ def test_setup_paths_missing_dir(tmp_path):
 
 def test_setup_paths_no_csv(tmp_path):
     """Ensure FileNotFoundError is raised if no CSV files found."""
-    year = 2025
+    year = 2023
     input_dir = tmp_path / "data" / str(year)
     input_dir.mkdir(parents=True)
     with pytest.raises(FileNotFoundError):

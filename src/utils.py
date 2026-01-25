@@ -1,11 +1,24 @@
+import os
 import sys
 import json
+import time
 import logging
 import jsonschema
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Callable
+from functools import wraps
 
-use_logging = False  # global flag, toggled by CLI
+def _auto_detect_debug() -> bool:
+    """Auto-detect debug mode via environment or attached debugger."""
+    if os.getenv("VSCODE_DEBUGGING") == "1":
+        return True
+    return sys.gettrace() is not None
+
+# Global flags
+use_logging = False  # toggled by CLI
+debug_mode = _auto_detect_debug()
+perf_monitoring = True  # toggled as needed
+
 
 def notify(message: str, level: str = "info"):
     """
@@ -17,7 +30,6 @@ def notify(message: str, level: str = "info"):
         log_fn = getattr(logging, level, logging.info)
         log_fn(message)
     else:
-        # print(message)
         try:
             print(message)
         except UnicodeEncodeError:
@@ -29,6 +41,27 @@ def notify(message: str, level: str = "info"):
             except Exception:
                 # Last-resort fallback: print ASCII with replacement to avoid raising
                 print(message.encode("ascii", errors="replace").decode("ascii"))
+
+
+def time_it(fn: Callable) -> Callable:
+    """
+    Decorator to time function execution and log duration.
+    Only outputs if perf_monitoring is enabled.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        # If monitoring is OFF, just call the function
+        if not perf_monitoring:
+            return fn(*args, **kwargs)
+        
+        start_time = time.perf_counter()
+        result = fn(*args, **kwargs)
+        end_time = time.perf_counter()
+        duration = end_time - start_time
+        
+        notify(f"PERF: Function '{fn.__name__}' took {duration:.6f}s", level="info")
+        return result
+    return wrapper
 
 
 def setup_paths(year: int, base_dir: Path = Path("data")) -> tuple[Path, Path, list[Path]]:
@@ -72,19 +105,135 @@ def load_rules(rules_path: Path) -> Dict[str, Any]:
 def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles"), schema_filename: str = "profile_template.json") -> Dict[str, Any]:
     """
     Load and validate a per-bank profile config.
-    - profiles_dir: directory containing <bank>.json and profile_template.json
+    Supports fuzzy matching: if exact bank.json not found, searches for partial matches.
+    
+    Args:
+        bank: Bank identifier (e.g., "td", "TD Visa", "triangle")
+        profiles_dir: Directory containing <bank>.json and profile_template.json
+        schema_filename: Name of the JSON schema file
+    
+    Returns:
+        Dict[str, Any]: Validated bank profile config
+    
+    Raises:
+        FileNotFoundError: If no profile found (exact or partial match)
     """
-    profile_path = Path(profiles_dir) / f"{bank}.json"
-    schema_path = Path(profiles_dir) / schema_filename
+    profiles_dir = Path(profiles_dir)
+    schema_path = profiles_dir / schema_filename
 
-    if not profile_path.exists():
-        raise FileNotFoundError(f"No profile config found for bank: {bank}")
     if not schema_path.exists():
         raise FileNotFoundError(f"No profile schema found at: {schema_path}")
 
-    with open(profile_path, "r") as f:
-        profile = json.load(f)
-    with open(schema_path, "r") as f:
-        schema = json.load(f)
-    jsonschema.validate(instance=profile, schema=schema)
-    return profile
+    # --- Try exact match first ---
+    profile_path = profiles_dir / f"{bank}.json"
+    if profile_path.exists():
+        with open(profile_path, "r") as f:
+            profile = json.load(f)
+        with open(schema_path, "r") as f:
+            schema = json.load(f)
+        jsonschema.validate(profile, schema)
+        return profile
+
+    # --- Fuzzy match: search for files containing the bank id (case-insensitive) ---
+    bank_lower = bank.lower()
+    matching_files = [
+        f for f in profiles_dir.glob("*.json")
+        if f.name != schema_filename and bank_lower in f.stem.lower()
+    ]
+
+    if matching_files:
+        # Use the first match (or pick the best one if multiple)
+        profile_path = matching_files[0]
+        notify(f"No exact profile found for bank '{bank}'. Using closest match: '{profile_path.stem}'.", level="info")
+        with open(profile_path, "r") as f:
+            profile = json.load(f)
+        with open(schema_path, "r") as f:
+            schema = json.load(f)
+        jsonschema.validate(profile, schema)
+        return profile
+
+    # --- No match found ---
+    available = [f.stem for f in profiles_dir.glob("*.json") if f.name != schema_filename]
+    raise FileNotFoundError(f"No profile found for bank '{bank}'. Available profiles: {', '.join(available)}")
+
+
+def normalize_tx_to_canonical_shape(tx: Dict[str, Any], *, source_type: str) -> Dict[str, Any]:
+    """
+    Normalize diverse transaction dicts into the canonical raw_tx shape used by the pipeline:
+        {
+            "Date": "YYYY-MM-DD" | None,
+            "Description": str,
+            "Debit": float,      # >= 0.0
+            "Credit": float,     # >= 0.0
+            "Balance": float | None,
+            "source": "bank_account" | "credit_card" | ...
+        }
+
+    Input tx may be:
+      - Account CSV style: {"Date", "Description", "Debit", "Credit", "Balance?", ...}
+      - Card-style: {"transaction_date", "description", "amount", "balance?", ...}
+    """
+    # 1) Date
+    date_val = (
+        tx.get("Date")
+        or tx.get("date")
+        or tx.get("transaction_date")
+        or tx.get("posting_date")
+    )
+
+    # 2) Description
+    desc_val = (
+        tx.get("Description")
+        or tx.get("description")
+        or ""
+    )
+
+    # 3) Debit/Credit / Amount
+    debit_raw = tx.get("Debit")
+    credit_raw = tx.get("Credit")
+
+    # If explicit Debit/Credit provided, prefer them
+    if debit_raw is not None or credit_raw is not None:
+        try:
+            debit = float(debit_raw or 0.0)
+        except (TypeError, ValueError):
+            debit = 0.0
+        try:
+            credit = float(credit_raw or 0.0)
+        except (TypeError, ValueError):
+            credit = 0.0
+    else:
+        # Fallback to signed amount (card-style)
+        amt_raw = tx.get("amount", 0.0)
+        try:
+            amt = float(amt_raw or 0.0)
+        except (TypeError, ValueError):
+            amt = 0.0
+
+        if amt > 0:
+            debit = amt
+            credit = 0.0
+        elif amt < 0:
+            debit = 0.0
+            credit = -amt
+        else:
+            debit = credit = 0.0
+
+    # 4) Balance
+    balance_raw = tx.get("Balance")
+    if balance_raw is None:
+        balance_raw = tx.get("balance")
+
+    try:
+        balance = float(balance_raw) if balance_raw is not None else None
+    except (TypeError, ValueError):
+        balance = None
+
+    return {
+        "Date": date_val,
+        "Description": str(desc_val),
+        "Debit": float(debit),
+        "Credit": float(credit),
+        "Balance": balance,
+        "source": source_type,
+    }

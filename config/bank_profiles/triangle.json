@@ -1,5 +1,19 @@
 {
   "bank_name": "Triangle MasterCard",
+  "skip_pages_by_index": [0],
+  "page_header_anchor": "Details of your account summary",
+  "table_settings": {
+    "vertical_strategy": "explicit",
+    "explicit_vertical_lines": [],
+    "horizontal_strategy": "text",
+    "text_x_tolerance": 25,
+    "text_y_tolerance": 4,
+    "min_words_vertical": 1,
+    "min_words_horizontal": 1,
+    "intersection_tolerance": 15,
+    "snap_tolerance": 5,
+    "join_tolerance": 5
+  },
   "sections": [
     {
       "section_name": "Payments",
@@ -10,6 +24,8 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "footer_row_text": "Total payments received",
       "skip_footer_rows": true
     },
     {
@@ -21,6 +37,8 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "footer_row_text": "Total returns and credits",
       "skip_footer_rows": true
     },
     {
@@ -32,6 +50,8 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "footer_row_text": "Total purchases",
       "skip_footer_rows": true
     },
     {
@@ -43,6 +63,8 @@
         "description": 2,
         "amount": 3
       },
+      "header_labels": ["TRANSACTION\nDATE", "POSTING\nDATE", "TRANSACTION DESCRIPTION", "AMOUNT ($)"],
+      "footer_row_text": "Total interest charges",
       "skip_footer_rows": true
     }
   ]

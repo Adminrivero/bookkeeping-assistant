@@ -16,7 +16,7 @@ Config
   - JSON structure validated by rules loader.
 - `config/bank_profiles/`
   - Per-bank profile JSON files (e.g., `triangle.json`) plus a `profile_template.json` schema.
-  - Profiles describe how to recognize and parse sections in PDF statements.
+  - Profiles describe how to recognize and parse sections in PDF statements (match text, column indexes, header labels, table_settings).
 
 `src/ingest.py`
 - Reads and normalizes CSV statements.
@@ -63,9 +63,12 @@ Developer notes
 Quickstart
 - Ingest + classify + export for 2024 with logging:
   - `python project.py --year 2024 --rules config/allocation_rules.json --log`
+- Run PDF parsing in debug mode (env var):
+  - `VSCODE_DEBUGGING=1 python project.py --year 2024 --rules config/allocation_rules.json`
+- Programmatic debug:
+  - call `ingest_year("2024", "triangle", debug=True)`
 - Run tests:
   - `pytest tests/`
 
 Notes
-- Keep rules and profiles under version control when updating classification logic or adding banks.
-- Add tests for any parsing edge-cases discovered in live statements.
+- Add tests for new parsing heuristics and keep bank_profiles tuned against sample statements.
