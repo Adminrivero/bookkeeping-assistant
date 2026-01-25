@@ -11,3 +11,7 @@ __pycache__/
 # Ignore business logic files
 data/*
 output/*
+.pydebug/
+
+# Local environment files
+unstaged.txt
