@@ -95,7 +95,7 @@ def main():
         notify(f"Output will be saved to: {output_file}", level="info")
 
     # Run pipeline
-    wb = run_pipeline(transactions, args.rules, show_progress=(not args.no_progress))
+    wb = run_pipeline(transactions, args.rules, show_progress=(not args.no_progress), tax_year=args.year)
     wb.save(output_file)
 
     notify(f"\n✅ Success! Pipeline complete. File saved to {output_file}", level="info")

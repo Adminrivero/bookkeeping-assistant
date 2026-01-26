@@ -33,6 +33,25 @@ class SpreadsheetExporter:
         self.credit_card_font = Font(color="FF0000")  # red
 
 
+    def set_tax_year(self, tax_year: int | str):
+        """
+        Write the tax year into A1 with prominent styling (call before build_headers).
+        
+        args:
+            tax_year: int or str tax year (e.g., 2025)
+        """
+        year_text = str(tax_year)
+        cell = self.ws["A1"]
+        cell.value = year_text
+        cell.font = Font(bold=True, size=18, color="FFFFFF")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.fill = PatternFill("solid", fgColor="305496")
+        # Improve visibility
+        self.ws.row_dimensions[1].height = 23
+        if (self.ws.column_dimensions["A"].width or 0) < 12:
+            self.ws.column_dimensions["A"].width = 12
+            
+
     def build_headers(self):
         """Create header row using schema definitions."""
         schema = get_schema()
@@ -53,6 +72,10 @@ class SpreadsheetExporter:
         """
         Write a single classified transaction into the spreadsheet.
         transaction: dict with keys matching schema column names.
+        
+        args:
+            row_idx: int row number to write to (1-based)
+            transaction: dict mapping schema column names -> values
         """
         schema = get_schema()
         is_credit_card_source = bool(transaction.get("credit_card_source"))
@@ -94,9 +117,16 @@ class SpreadsheetExporter:
 
 
     def finalize_totals_row(self, start_row: int, end_row: int):
-        """Add totals row at the bottom for numeric columns (C through AA)."""
+        """
+        Add totals row at the bottom for numeric columns (C through AA).
+        
+        args:
+            start_row: int first data row index
+            end_row: int last data row index
+        """
         schema = get_schema()
         totals_row = end_row + 1
+        
         for idx, col in enumerate(schema, start=1):
             if (col.letter >= "C" and col.letter <= "Z") or (col.letter == "AA"):
                 formula = f"=SUM({col.letter}{start_row}:{col.letter}{end_row})"
@@ -112,6 +142,7 @@ class SpreadsheetExporter:
                 cell = self.ws.cell(row=totals_row, column=idx)
                 cell.value = "Totals" # type: ignore
                 cell.font = Font(bold=True)
+                
         # Add borders to all cells in the totals row for visibility
         for idx in range(1, len(schema) + 1):
             cell = self.ws.cell(row=totals_row, column=idx)

@@ -51,7 +51,7 @@ def ingest_statement(file_path, bank: str, tax_year: Optional[int] = None):
         raise ValueError(f"Unsupported file type: {suffix}")
 
 
-def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bool = True):
+def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bool = True, tax_year: Optional[int] = None):
     """
     Full pipeline: classify transactions and export to Excel workbook.
 
@@ -76,6 +76,7 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
     if show_progress:
         notify("[2/4] Building exporter...", level="info")
     exporter = SpreadsheetExporter()
+    exporter.set_tax_year(tax_year or "N/A")
     exporter.build_headers()
     if show_progress:
         notify("    ✅ Exporter ready", level="info")
