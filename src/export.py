@@ -48,8 +48,8 @@ class SpreadsheetExporter:
         cell.fill = PatternFill("solid", fgColor="305496")
         # Improve visibility
         self.ws.row_dimensions[1].height = 23
-        if (self.ws.column_dimensions["A"].width or 0) < 12:
-            self.ws.column_dimensions["A"].width = 12
+        if (self.ws.column_dimensions["A"].width or 0) < 15:
+            self.ws.column_dimensions["A"].width = 15
             
 
     def build_headers(self):
@@ -147,6 +147,46 @@ class SpreadsheetExporter:
         for idx in range(1, len(schema) + 1):
             cell = self.ws.cell(row=totals_row, column=idx)
             cell.border = self.thin_border
+
+
+    def add_color_legend(self, last_transaction_row: int, separation: int = 5):
+        """
+        Append a two-column color guide starting `separation` empty rows after the
+        last_transaction_row. Left column (A) is a single merged cell (4 rows tall)
+        with centered 'COLOR GUIDE', right column (B) contains 4 descriptive rows.
+        
+        args:
+            last_transaction_row: int last row index containing transaction data
+            separation: int number of empty rows between last transaction and legend (default: 5)
+        """
+        start = last_transaction_row + separation + 1
+        end = start + 3  # 4 rows tall
+
+        # Merge left column A over the 4 rows
+        left_range = f"A{start}:A{end}"
+        self.ws.merge_cells(left_range)
+        left_cell = self.ws[f"A{start}"]
+        left_cell.value = "COLOR GUIDE"
+        left_cell.font = Font(bold=True, size=11)
+        left_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Prepare right column texts + styles
+        rows = [
+            ("BLACK - BANK ACCOUNT - DEBIT (CHEQUING)", {"font_color": "000000", "fill": None}),
+            ("GREEN - PAID CASH", {"font_color": "00A000", "fill": None}),
+            ("RED - PAID OR RELATED TO CREDIT CARDS", {"font_color": "FF0000", "fill": None}),
+            ("HIGHLIGHTED YELLOW - Manual review required", {"font_color": "000000", "fill": "FFFF00"}),
+        ]
+
+        for idx, (text, style) in enumerate(rows):
+            r = start + idx
+            cell = self.ws[f"B{r}"]
+            cell.value = text
+            cell.font = Font(bold=True, color=style["font_color"])
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+            if style["fill"]:
+                cell.fill = PatternFill("solid", fgColor=style["fill"])
+            self.ws.row_dimensions[r].height = 18
 
 
     def save(self, filename: str):

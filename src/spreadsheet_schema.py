@@ -60,8 +60,8 @@ DATE_STYLE = {
 # --------------------------
 
 COLUMNS: List[ColumnSchema] = [
-    ColumnSchema("A", "Date", "Transaction date", DATE_STYLE, width=12.0),
-    ColumnSchema("B", "Item", "Transaction description", TEXT_STYLE, width=30.0),
+    ColumnSchema("A", "Date", "Transaction date", DATE_STYLE, width=15.0),
+    ColumnSchema("B", "Item", "Transaction description", TEXT_STYLE, width=50.0),
     ColumnSchema("C", "Withdrawals CR", "Liability / General Credit", EXPENSE_STYLE, width=15.0),
     ColumnSchema("D", "Deposits DR", "Asset / General Debit", EXPENSE_STYLE, width=15.0),
     ColumnSchema("E", "A/R DR", "Accounts Receivable (Asset)", EXPENSE_STYLE, width=15.0),
