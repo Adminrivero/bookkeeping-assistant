@@ -23,11 +23,14 @@ class SpreadsheetExporter:
         self.ws.title = "Bookkeeping"
         self.highlight_fill = PatternFill("solid", fgColor="FFFF99")
         self.ignore_fill = PatternFill("solid", fgColor="D9D9D9")
+        # Reusable side styles and thin-border definition
+        self.thin_side = Side(border_style="thin", color="000000")
+        self.thick_side = Side(border_style="thick", color="000000")
         self.thin_border = Border(
-            top=Side(border_style="thin", color="000000"),
-            bottom=Side(border_style="thin", color="000000"),
-            left=Side(border_style="thin", color="000000"),
-            right=Side(border_style="thin", color="000000")
+            top=self.thin_side,
+            bottom=self.thin_side,
+            left=self.thin_side,
+            right=self.thin_side,
         )
         # Font style for credit-card-sourced transactions
         self.credit_card_font = Font(color="FF0000")  # red
@@ -187,6 +190,19 @@ class SpreadsheetExporter:
             if style["fill"]:
                 cell.fill = PatternFill("solid", fgColor=style["fill"])
             self.ws.row_dimensions[r].height = 18
+        
+        # Apply thick outer border around the legend rectangle and thin internal borders
+        for r in range(start, end + 1):
+            # Left column cell (within merged block)
+            left_cell = self.ws[f"A{r}"]
+            right_cell = self.ws[f"B{r}"]
+
+            top_side = self.thick_side if r == start else self.thin_side
+            bottom_side = self.thick_side if r == end else self.thin_side
+
+            # Make inner separator (A|B) thick by using thick_side for both adjacent edges
+            left_cell.border = Border(top=top_side, bottom=bottom_side, left=self.thick_side, right=self.thick_side)
+            right_cell.border = Border(top=top_side, bottom=bottom_side, left=self.thick_side, right=self.thick_side)
 
 
     def save(self, filename: str):
