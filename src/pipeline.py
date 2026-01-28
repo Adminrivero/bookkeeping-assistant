@@ -98,7 +98,10 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
     if show_progress:
         notify("[4/4] Finalizing totals row...", level="info")
     if end_row >= start_row:
+        # Add totals only if there are transactions
         exporter.finalize_totals_row(start_row, end_row)
+        # Add color guide 5 rows below last transaction row
+        exporter.add_color_legend(end_row, separation=5)
         if show_progress:
             notify("    ✅ Totals row complete", level="info")
     else:
