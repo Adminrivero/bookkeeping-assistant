@@ -7,6 +7,7 @@ based on the schema defined in spreadsheet_schema.py.
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.formatting.rule import CellIsRule
 from src.spreadsheet_schema import get_schema
 
 class SpreadsheetExporter:
@@ -150,6 +151,99 @@ class SpreadsheetExporter:
         for idx in range(1, len(schema) + 1):
             cell = self.ws.cell(row=totals_row, column=idx)
             cell.border = self.thin_border
+
+
+    def add_annual_summary_section(self, totals_row: int, separation: int = 1):
+        """
+        Append a compact annual summary two rows below the totals_row:
+         - Left merged G{start}:G{start+1} with "ANNUAL\\nSUMMARY"
+         - Headers H{start}/I{start}/J{start} ("INCOME","EXPENSES","NET")
+         - Values in H{start+1}/I{start+1}/J{start+1} with formulas and number formatting
+         - Thick outer border; double bottom border on NET; conditional formatting on NET
+         
+         args:
+            totals_row: int row index of the totals row
+            separation: int number of empty rows between totals_row and summary (default: 1)
+        """
+        if not totals_row or totals_row < 1:
+            return
+
+        start = totals_row + separation + 1  # separation empty rows, then summary row
+        top_row = start
+        bottom_row = start + 1
+
+        # Merge left column and style
+        left_range = f"G{top_row}:G{bottom_row}"
+        self.ws.merge_cells(left_range)
+        left_cell = self.ws[f"G{top_row}"]
+        left_cell.value = "ANNUAL\nSUMMARY"
+        left_cell.font = Font(bold=True, color="FFFFFF")
+        left_cell.fill = PatternFill("solid", fgColor="203764")  # navy-like
+        left_cell.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+        # Headers (top row)
+        headers = [("H", "INCOME"), ("I", "EXPENSES"), ("J", "NET")]
+        header_fill = PatternFill("solid", fgColor="D9D9D9")
+        for col, label in headers:
+            c = self.ws[f"{col}{top_row}"]
+            c.value = label
+            c.font = Font(bold=True)
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Formulas (bottom row)
+        income_cell = f"H{bottom_row}"
+        expenses_cell = f"I{bottom_row}"
+        net_cell = f"J{bottom_row}"
+
+        self.ws[income_cell].value = f"=H{totals_row}"
+        self.ws[expenses_cell].value = f"=SUM(I{totals_row}:W{totals_row})"
+        self.ws[net_cell].value = f"={income_cell}-{expenses_cell}"
+
+        # Numeric format and alignment
+        for coord in (income_cell, expenses_cell, net_cell):
+            cell = self.ws[coord]
+            cell.number_format = "#,##0.00"
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+
+        # Borders: thick outer border around G{top_row}:J{bottom_row}
+        for r in range(top_row, bottom_row + 1):
+            top_side = self.thick_side if r == top_row else self.thin_side
+            bottom_side = self.thick_side if r == bottom_row else self.thin_side
+
+            # Left column cell
+            left = self.ws[f"G{r}"]
+            left.border = Border(top=top_side, bottom=bottom_side, left=self.thick_side, right=self.thin_side)
+
+            # Middle columns H/I
+            for col in ("H", "I"):
+                cell = self.ws[f"{col}{r}"]
+                cell.border = Border(top=top_side, bottom=bottom_side, left=self.thin_side, right=self.thin_side)
+
+            # Rightmost column J: outer right thick
+            right = self.ws[f"J{r}"]
+            right.border = Border(top=top_side, bottom=bottom_side, left=self.thin_side, right=self.thick_side)
+
+        # Double bottom border on NET value
+        double_bottom = Side(border_style="double", color="000000")
+        net_cell_obj = self.ws[net_cell]
+        # keep existing top/left/right sides if present, overwrite bottom
+        existing = net_cell_obj.border
+        net_cell_obj.border = Border(
+            top=existing.top or self.thin_side,
+            left=existing.left or self.thin_side,
+            right=existing.right or self.thin_side,
+            bottom=double_bottom,
+        )
+
+        # Conditional formatting for NET cell (>0 green, <0 red)
+        green_font = Font(color="008000")
+        red_font = Font(color="FF0000")
+
+        self.ws.conditional_formatting.add(net_cell,
+            CellIsRule(operator="greaterThan", formula=["0"], font=green_font))
+        self.ws.conditional_formatting.add(net_cell,
+            CellIsRule(operator="lessThan", formula=["0"], font=red_font))
 
 
     def add_color_legend(self, last_transaction_row: int, separation: int = 5):

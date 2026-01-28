@@ -100,6 +100,9 @@ def run_pipeline(transactions, rules_file, start_row: int = 4, show_progress: bo
     if end_row >= start_row:
         # Add totals only if there are transactions
         exporter.finalize_totals_row(start_row, end_row)
+        totals_row = end_row + 1
+        # Add annual summary section below totals
+        exporter.add_annual_summary_section(totals_row, separation=1)
         # Add color guide 5 rows below last transaction row
         exporter.add_color_legend(end_row, separation=5)
         if show_progress:
