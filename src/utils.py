@@ -102,14 +102,14 @@ def load_rules(rules_path: Path) -> Dict[str, Any]:
     return rules
 
 
-def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles"), schema_filename: str = "profile_template.json") -> Dict[str, Any]:
+def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles"), schema_filename: str = "bank_profile_schema.json") -> Dict[str, Any]:
     """
     Load and validate a per-bank profile config.
     Supports fuzzy matching: if exact bank.json not found, searches for partial matches.
     
     Args:
         bank: Bank identifier (e.g., "td", "TD Visa", "triangle")
-        profiles_dir: Directory containing <bank>.json and profile_template.json
+        profiles_dir: Directory containing bank profile JSON files
         schema_filename: Name of the JSON schema file
     
     Returns:
@@ -120,6 +120,12 @@ def load_bank_profile(bank: str, profiles_dir: Path = Path("config/bank_profiles
     """
     profiles_dir = Path(profiles_dir)
     schema_path = profiles_dir / schema_filename
+    
+    # Fallback: look in canonical config/schemas/ if not found in profiles_dir
+    if not schema_path.exists():
+        alt = Path("config") / "schemas" / schema_filename
+        if alt.exists():
+            schema_path = alt
 
     if not schema_path.exists():
         raise FileNotFoundError(f"No profile schema found at: {schema_path}")

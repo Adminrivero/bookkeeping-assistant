@@ -50,7 +50,7 @@ def fake_cli_data(tmp_path):
         },
         "required": ["bank_name"]
     }
-    (bank_profiles_dir / "profile_template.json").write_text(json.dumps(profile_schema))
+    (bank_profiles_dir / "bank_profile_schema.json").write_text(json.dumps(profile_schema))
 
     # Minimal per-bank profiles required by pipeline (include 'formats' so pipeline accepts CSV/PDF)
     (bank_profiles_dir / "triangle.json").write_text(json.dumps({

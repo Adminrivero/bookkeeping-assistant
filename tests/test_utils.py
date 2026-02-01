@@ -17,7 +17,8 @@ def test_load_bank_profile(tmp_path):
     profiles_dir.mkdir()
     profile = {"bank_name": "sample"}
     (profiles_dir / "sample.json").write_text(json.dumps(profile))
-    (profiles_dir / "profile_template.json").write_text(json.dumps({"type": "object"}))
+    # (profiles_dir / "profile_template.json").write_text(json.dumps({"type": "object"}))
+    (profiles_dir / "bank_profile_schema.json").write_text(json.dumps({"type": "object"}))
     loaded = load_bank_profile("sample", profiles_dir=profiles_dir)
     assert loaded["bank_name"] == "sample"
 

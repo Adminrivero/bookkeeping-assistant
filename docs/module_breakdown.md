@@ -15,8 +15,11 @@ Config
   - Stores classification rules (merchant keywords, thresholds, categories).
   - JSON structure validated by rules loader.
 - `config/bank_profiles/`
-  - Per-bank profile JSON files (e.g., `triangle.json`) plus a `profile_template.json` schema.
+  - Per-bank profile JSON files (e.g., `triangle.json`).
   - Profiles describe how to recognize and parse sections in PDF statements (match text, column indexes, header labels, table_settings).
+- `config/schemas/`
+  - `bank_profile_schema.json` — canonical JSON Schema that enforces required fields, types and allowed values for bank profile entries (e.g., `match_text`, `header_labels`, `column_indexes`, `table_settings`, `vertical_strategy`, `date_format`, `amount_format`).
+  - Profile schema is used at load-time (via `src.utils.load_bank_profile`) to validate bank profile JSON files, emit helpful validation errors, and ensure parsing code and tests/CI can rely on a consistent profile structure.
 
 `src/ingest.py`
 - Reads and normalizes CSV statements.
@@ -57,7 +60,7 @@ Developer notes
 - Debugging: 
   - Visual crops and search strips are saved to `.pydebug/`.
   - Enable via `VSCODE_DEBUGGING=1` or by attaching a debugger.
-- Bank profile validation: `load_bank_profile` validates profiles against `profile_template.json`.
+- Bank profile validation: `load_bank_profile` validates profiles against `bank_profile_schema.json`.
 - PDF parsing: supports `table_settings` (from `pdfplumber`), `header_labels`, and `footer_row_text` for precise extraction.
 
 Quickstart
