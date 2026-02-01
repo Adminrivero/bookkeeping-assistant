@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legacy Allocation Rules Schema (v1)",
+  "description": "Schema for legacy classification rules used by the existing engine, extended with optional metadata for the Rule Generator Wizard.",
+  "type": "object",
+  "required": ["_name", "_version", "_description", "_scope", "_rules"],
+  "additionalProperties": false,
+
+  "properties": {
+    "_name": { "type": "string" },
+    "_version": { "type": "string" },
+    "_description": { "type": "string" },
+
+    "_scope": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category_name", "transaction_type", "logic", "rules"],
+        "additionalProperties": false,
+
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Optional unique identifier for Wizard use. Ignored by legacy engine."
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional explicit priority for Wizard use. Legacy engine still uses file order."
+          },
+          "scope": {
+            "type": "string",
+            "description": "Optional Wizard-defined scope tag (e.g., 'td_visa', 'global')."
+          },
+
+          "category_name": { "type": "string" },
+
+          "transaction_type": {
+            "type": "string",
+            "enum": [
+              "EXPENSE",
+              "INCOME_TO_OFFSET_EXPENSE",
+              "MANUAL_CR",
+              "MANUAL_DR",
+              "IGNORE_TRANSACTION"
+            ]
+          },
+
+          "logic": {
+            "type": "string",
+            "enum": ["MUST_MATCH_ANY", "MUST_MATCH_ALL"]
+          },
+
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "oneOf": [
+                {
+                  "required": ["field", "operator", "value"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": ["Description", "Debit", "Credit", "Date", "Balance"]
+                    },
+                    "operator": {
+                      "type": "string",
+                      "enum": [
+                        "CONTAINS",
+                        "STARTS_WITH",
+                        "EQUALS",
+                        "BETWEEN",
+                        "LESS_THAN_OR_EQUAL_TO"
+                      ]
+                    },
+                    "value": {}
+                  }
+                },
+                {
+                  "required": ["group_logic", "rules"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "group_logic": {
+                      "type": "string",
+                      "enum": ["MUST_MATCH_ANY", "MUST_MATCH_ALL"]
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": { "$ref": "#/properties/_rules/items/properties/rules/items" }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+
+          "dual_entry": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "DR_COLUMN": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "letter": { "type": "string" }
+                }
+              },
+              "CR_COLUMN": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "letter": { "type": "string" }
+                }
+              },
+              "APPLY_PERCENTAGE": { "type": "number" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
