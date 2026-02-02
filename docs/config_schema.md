@@ -1,6 +1,6 @@
 # 📑 Config Schema Guide
 
-Bank profile configs are validated against `config/profile_template.json`.  
+Bank profile configs are validated against `config/schemas/bank_profile_schema.json`.  
 This ensures consistency across all banks and prevents subtle errors.
 
 ---

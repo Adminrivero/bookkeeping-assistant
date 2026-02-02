@@ -19,7 +19,7 @@ Profiles describe:
 - **Footer rules** (skip totals, balances via anchor text)
 - **Optional CSV format rules** (for banks that export CSVs directly)
 
-All profiles are validated against `config/profile_template.json` (JSON schema).
+All profiles are validated against `config/schemas/bank_profile_schema.json` (JSON schema).
 
 ---
 
@@ -34,7 +34,7 @@ All profiles are validated against `config/profile_template.json` (JSON schema).
    - Filename convention
 
 2. **Fill in the Template**
-   - Use `profile_template.json` as a reference.
+   - Use `bank_profile_schema.json` as a reference.
    - Define `bank_name`, `sections`, and optional `csv_format`.
 
 3. **Save Config**
