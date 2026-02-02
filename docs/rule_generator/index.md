@@ -7,24 +7,24 @@ Purpose
 Canonical artifacts
 - Rule schema (authoritative): `config/schemas/rule_schema.json`
 - Legacy allocation rules: `config/allocation_rules.json`
-- Schema validation tests: `tests/test_rule_schema_validation.py`
+- Schema validation tests: `tests/rule_generator/test_rule_schema_validation.py`
 
 Primary docs
-- Constraints (authoritative design & invariants): `docs/rule-generator/rule_generator_constraints.md`
-- Evaluation contract (legacy-compatible rules): `docs/rule-generator/rule_evaluation_contract.md`
-- Test harness contract (canonical tx shape & match-report): `docs/rule-generator/test_harness_contract.md`
+- Constraints (authoritative design & invariants): `docs/rule_generator/rule_generator_constraints.md`
+- Evaluation contract (legacy-compatible rules): `docs/rule_generator/rule_evaluation_contract.md`
+- Test harness contract (canonical tx shape & match-report): `docs/rule_generator/test_harness_contract.md`
 
 How to validate locally
 - Run schema validation tests:
 ```bash
-pytest tests/test_rule_schema_validation.py -q
+pytest tests/rule_generator/test_rule_schema_validation.py -q
 ```
 
 How to use `rule_generator_constraints.md` with Copilot Agents
 This section helps avoid common mistakes when delegating work to VS Code Copilot Agents.
 
 1) Always attach these artifacts to Agent Briefs
-- Include: this constraints file (`rule_generator_constraints.md`), the rule schema (`config/schemas/rule_schema.json`), and the evaluation contract (`docs/rule-generator/rule_evaluation_contract.md`).
+- Include: this constraints file (`rule_generator_constraints.md`), the rule schema (`config/schemas/rule_schema.json`), and the evaluation contract (`docs/rule_generator/rule_evaluation_contract.md`).
 - Agents must import, not infer.
 
 2) Limit agent scope: implement, don't design

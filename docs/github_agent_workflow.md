@@ -9,7 +9,7 @@
 ## **Purpose**
 
 - Provide a compact, reproducible workflow for humans and Copilot Agents to create, test, review, and merge changes safely.  
-- Keep process separate from product constraints (see `docs/rule_generator_constraints.md`).  
+- Keep process separate from product constraints (see `docs/rule_generator/rule_generator_constraints.md`).  
 - Ensure all contributions remain small, auditable, and reversible.
 
 ---
@@ -48,8 +48,8 @@ Format:
 `<type>(<scope>): short summary`
 
 ### **Examples**
-- `feat(export): add set_tax_year to SpreadsheetExporter`
-- `fix(pdf_ingest): avoid dropping entire table when header drop >= available rows`
+- `feat(export): Add set_tax_year to SpreadsheetExporter`
+- `fix(pdf_ingest): Avoid dropping entire table when header drop >= available rows`
 
 ### **Create commit**
 ```bash
@@ -92,7 +92,7 @@ gh pr create --fill
 - Testing instructions / commands  
 - Summary of files changed  
 - Links to related issues  
-- Links to constraints (`docs/rule_generator_constraints.md`)  
+- Links to constraints (`docs/rule_generator/rule_generator_constraints.md`)  
 
 ---
 
@@ -143,7 +143,7 @@ Agents must:
 
 - Use a single‑purpose branch and PR  
 - Include tests and update docs when behavior changes  
-- Reference `docs/rule_generator_constraints.md` in PR description  
+- Reference `docs/rule_generator/rule_generator_constraints.md` in PR description  
 - Not modify unrelated files  
 - Not perform multi‑step or multi‑module changes  
 - Never push directly to `main`  
