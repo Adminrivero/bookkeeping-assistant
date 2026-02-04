@@ -68,14 +68,17 @@ Originally built as a CS50P final project, the system has evolved into a flexibl
 bookkeeping-assistant/<br>
 ├── README.md<br>
 ├── requirements.txt<br>
-├── project.py &nbsp;&nbsp;&nbsp; # Main entry point with main() and core functions<br>
+├── project.py &nbsp;&nbsp;&nbsp; # Main entry point (Analysis & Report pipeline)<br>
+├── rulegen.py &nbsp;&nbsp;&nbsp; # Rule Generator Wizard (CLI)<br>
 ├── config/<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── allocation_rules.json &nbsp;&nbsp;&nbsp; # Classification rules<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── profile_template.json &nbsp;&nbsp;&nbsp; # JSON schema for validation <br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── bank_profiles/ &nbsp;&nbsp;&nbsp; # Bank profile configs (Triangle, CIBC, TD Visa) <br>
-│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── triangle.json<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── cibc.json<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── td_visa.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── allocation_rules.json &nbsp;&nbsp;&nbsp; # Active classification rules<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── bank_profiles/ &nbsp;&nbsp;&nbsp; # Bank profile configs (Triangle, CIBC, TD Visa)<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; │ &nbsp;&nbsp;&nbsp;&nbsp; ├── triangle.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; │ &nbsp;&nbsp;&nbsp;&nbsp; ├── cibc.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; │ &nbsp;&nbsp;&nbsp;&nbsp; └── td_visa.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── schemas/ &nbsp;&nbsp;&nbsp; # JSON Schemas for validation<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── bank_profile_schema.json<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── rule_schema.json<br>
 ├── data/ &nbsp;&nbsp;&nbsp; # Input files<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/ &nbsp;&nbsp;&nbsp; # Tax year with transaction files<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── account.csv &nbsp;&nbsp;&nbsp; # Bank account activity/transactions (`.csv`)<br>
@@ -89,24 +92,30 @@ bookkeeping-assistant/<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; └── 2025/bookkeeping_2025.xlsx<br> 
 ├── src/ &nbsp;&nbsp;&nbsp; # Modular components<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── \_\_init\_\_.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── ingest.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── classify.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── export.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── mapping.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── pipeline.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── rules.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── pdf_ingest.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── classify.py &nbsp;&nbsp;&nbsp; # Rule matching engine<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── csv_ingest.py &nbsp; # CSV parsing specific logic<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── export.py &nbsp;&nbsp;&nbsp;&nbsp; # Excel generation & summary formulas<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── ingest.py &nbsp;&nbsp;&nbsp;&nbsp; # General statement normalization<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── mapping.py &nbsp;&nbsp;&nbsp; # Account/Category mapping<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── pdf_ingest.py &nbsp; # PDF extraction using bank profiles<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── pipeline.py &nbsp;&nbsp; # Process orchestration<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── rules.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # Rule loading & schema validation helpers<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── spreadsheet_schema.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── utils.py<br>
-├── tests/ &nbsp;&nbsp; # Unit tests<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── utils.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # Shared helpers & notify system<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── rule_generator/ &nbsp;&nbsp;&nbsp; # Wizard internal logic<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── schema.py<br>
+├── tests/ &nbsp;&nbsp; # Unit & Integration tests<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_classify.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_export_summary.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_ingest.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_pdf_ingest.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_pipeline.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_pipeline_integration.py<br>
 │ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_project_smoke.py<br>
-│ &nbsp;&nbsp;&nbsp;&nbsp; └── test_rules_integration.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; ├── test_utils.py<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp; └── rule_generator/ &nbsp;&nbsp;&nbsp; # Wizard-specific test suite<br>
+│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── test_rule_schema_validation.py<br>
 └── docs/ &nbsp;&nbsp;&nbsp; # Extended documentation<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── rule_generator/ &nbsp;&nbsp;&nbsp; # Wizard design & evaluation contracts<br>
 
 ---
 
