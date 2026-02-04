@@ -47,13 +47,20 @@ Originally built as a CS50P final project, the system has evolved into a flexibl
 
 ## 🧠 Technologies
 
-- **Python 3** – modular, testable codebase using OOP and CLI patterns
-- **CLI & UX** – argparse for command-line interface, tqdm for optional progress bar
-- **Spreadsheet Export** – openpyxl (with et_xmlfile) for Excel generation, formulas, and formatting
-- **Rules Engine** – JSON‑driven classification logic wired through TransactionClassifier and pipeline modules
-- **PDF Handling** – pdfminer.six, pdfplumber, pypdfium2, Pillow for parsing and processing statement PDFs
-- **Testing** – pytest for unit and integration tests
-- **Terminal Experience** – logging for structured logs, colorama for clean Windows output
+- **Core**: Python 3 (Type Hinting, OOP, Modular Design)
+- **Data & Validation**:
+  - `jsonschema` – Strict validation for rule definitions (`rule_schema.json`) and bank profiles
+  - `openpyxl` – Excel spreadsheet generation, formulas, and formatting
+- **CLI & UX**:
+  - `argparse` – Command-line interface handling
+  - `tqdm` – Progress bar visualization
+  - `colorama` – Cross-platform terminal coloring
+  - `logging` – Structured diagnostic output
+- **PDF Processing**:
+  - `pdfplumber` & `pdfminer.six` – Text extraction and table parsing
+  - `pypdfium2` & `Pillow` – Rendering and image processing
+- **Quality Assurance**:
+  - `pytest` – Unit and integration testing framework
 
 ---
 
