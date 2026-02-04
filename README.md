@@ -17,29 +17,50 @@ Originally built as a CS50P final project, the system has evolved into a flexibl
 
 ## 🎯 Features
 
-- Ingests CSV, Excel, and PDF statements with automatic column mapping and support for multiple bank formats
-- Applies JSON-driven classification rules with nested groups, multiple operators, and per-rule confidence scoring
-- Flags ambiguous transactions for manual review (CSV export with suggested matches and metadata)
-- Supports per-transaction allocation splits and user-customizable categories via `allocation_rules.json`
-- Generates a formatted Excel spreadsheet with formulas and summaries
-- Organizes outputs into year-based directories under `output/` and creates tax-ready summaries
-- CLI with options for year, rules file, logging, progress bar, dry-run and export skipping (`--year`, `--rules`, `--log`, `--no-progress`, `--dry-run`)
-- Optional progress bar and improved logging terminal output for Windows (`tqdm`, `logging`)
-- Multi-bank support with profile configs (Triangle, CIBC, TD Visa)
-- Dual ingestion paths: PDF parsing or direct CSV validation
-- Robust unit/integration tests covering ingest, classification, pipeline, and export; CI integration via GitHub Actions
+### 📥 Ingestion & Normalization
+- **Multi-Format Support**: Seamlessly parses **CSV**, **Excel**, and **PDF** bank statements.
+- **Bank Profiles**: Extensible JSON configuration system allows defining custom mappings, header detection, and parsing rules for any institution (e.g., Triangle, CIBC, TD Visa).
+- **Dual-Path Processing**: Supports both direct CSV validation and PDF text extraction with automatic column mapping.
+
+### 🧠 Intelligent Classification
+- **Advanced Logic Engine**: JSON-driven ruleset utilizing nested `AND`/`OR` groups and a wide range of operators (`CONTAINS`, `STARTS_WITH`, `BETWEEN`, `REGEX`).
+- **Precision Bookkeeping**: Supports transaction splitting (allocating one expense to multiple categories) and specific Credit/Debit column mapping via a `chart_of_accounts`.
+- **Ambiguity Detection**: Automatically flags low-confidence matches or unclassified transactions for manual review in the verification export.
+
+### 🧙‍♂️ Rule Generator Wizard (v2.0 Preview)
+- **Interactive CLI**: A guided terminal assistant (`rulegen.py`) to create and validate categorization rules without manual JSON editing.
+- **Validation & Safety**:
+  - **Schema Compliance**: Real-time validation against `rule_schema.json` to prevent syntax errors.
+  - **Match Reports**: "Dry-run" capability to test rules against canonical transaction data, reporting matches, false positives, and false negatives.
+  - **Safe I/O**: Modifies `allocation_rules.json` while preserving existing formatting and comments.
+- **Advanced Mode**: Power-user interface for defining complex operators and custom dual-entry logic strings.
+
+### 📊 Export & Reporting
+- **Tax-Ready Output**: Generates formatted `.xlsx` workbooks with built-in formulas, categorization summaries, and visual formatting.
+- **Project Organization**: Automatically structures input and output files into year-based directories (`data/2025/`, `output/2025/`).
+
+### ⚙️ Developer Experience
+- **Robust CLI**: Comprehensive command-line arguments for year selection, logging verbosity (`--log`), progress bars (`tqdm`), and "dry-run" pipeline execution.
+- **Testing Standard**: High-coverage unit and integration test suite via `pytest` and GitHub Actions CI.
 
 ---
 
 ## 🧠 Technologies
 
-- **Python 3** – modular, testable codebase using OOP and CLI patterns
-- **CLI & UX** – argparse for command-line interface, tqdm for optional progress bar
-- **Spreadsheet Export** – openpyxl (with et_xmlfile) for Excel generation, formulas, and formatting
-- **Rules Engine** – JSON‑driven classification logic wired through TransactionClassifier and pipeline modules
-- **PDF Handling** – pdfminer.six, pdfplumber, pypdfium2, Pillow for parsing and processing statement PDFs
-- **Testing** – pytest for unit and integration tests
-- **Terminal Experience** – logging for structured logs, colorama for clean Windows output
+- **Core**: Python 3 (Type Hinting, OOP, Modular Design)
+- **Data & Validation**:
+  - `jsonschema` – Strict validation for rule definitions (`rule_schema.json`) and bank profiles
+  - `openpyxl` – Excel spreadsheet generation, formulas, and formatting
+- **CLI & UX**:
+  - `argparse` – Command-line interface handling
+  - `tqdm` – Progress bar visualization
+  - `colorama` – Cross-platform terminal coloring
+  - `logging` – Structured diagnostic output
+- **PDF Processing**:
+  - `pdfplumber` & `pdfminer.six` – Text extraction and table parsing
+  - `pypdfium2` & `Pillow` – Rendering and image processing
+- **Quality Assurance**:
+  - `pytest` – Unit and integration testing framework
 
 ---
 
