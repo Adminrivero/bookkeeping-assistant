@@ -138,9 +138,11 @@ To get the Bookkeeping Assistant running, you must first define your transaction
 
 3. **Define Classification Rules (Crucial Step)**: The assistant requires a set of rules to categorize and allocate transactions.
 
-   - **In v2.0**: Use the dedicated **Rule Generator Wizard** (`rulegen.py`) to guide you through creating your classification rules and saving them to `./config/allocation_rules.json`.
-
-   - *(Alternatively, you can manually create or edit the `./config/allocation_rules.json` file if you are familiar with the schema.)*
+   - **Recommended (v2.0)**: Use the **Rule Generator Wizard** to create rules interactively:
+     ```bash
+     python rulegen.py
+     ```
+   - **Manual**: Alternatively, edit `config/allocation_rules.json` directly following the [Rule Schema](config/schemas/rule_schema.json).
 
 4. **Place Input Files**: Place your bank and credit card **CSV/PDF files** into the appropriate directories within `data/{year}/`.
 
@@ -173,6 +175,19 @@ python project.py --year 2025
 - `--log` or `-l` -> Enable logging output
 
 - `--no-progress` or `-q` -> Disable progress bar
+
+### 🧙‍♂️ Rule Generator Wizard (`rulegen.py`)
+
+Run the interactive wizard to manage your ruleset:
+
+```bash
+python rulegen.py [options]
+```
+
+**Options:**
+- `--dry-run`: Test new rules against transactions without saving.
+- `--validate`: Check `allocation_rules.json` for schema compliance.
+- `--advanced-mode`: Enable complex operators (REGEX, BETWEEN) and manual account mapping.
 
 ### Examples:
 
@@ -209,7 +224,7 @@ pytest -v
 For detailed guides, see the docs:
 
 - [**Allocation Ruleset Schema**](./docs/allocation_ruleset_schema.md) - Reference guide for defining the JSON-driven classification rules
-- **Rules Creation Assistant** – Guide for defining classification rules
+- **Rules Creation Wizard** – Guide for defining classification rules (coming-soon)
 - [**PDF Ingestion**](./docs/pdf_ingestion.md) – How to place PDFs in `data/{year}/bank/` and run CLI
 - [**Bank Profiles**](./docs/bank_profiles.md) – How to add new bank configs
 - [**Config Schema**](./docs/config_schema.md) – JSON schema validation rules
