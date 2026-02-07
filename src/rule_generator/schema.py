@@ -1,12 +1,9 @@
 """Schema validation helpers for rule blocks and documents."""
 
 from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, TypedDict
-
-from jsonschema import RefResolver
 from jsonschema.validators import validator_for
 
 DEFAULT_SCHEMA_PATH = Path("config") / "schemas" / "rule_schema.json"
@@ -35,13 +32,29 @@ def load_rule_schema(path: Optional[Path] = None) -> Dict[str, Any]:
 
 
 def _build_validator(schema: Dict[str, Any], schema_fragment: Optional[Dict[str, Any]] = None):
-    """Create a jsonschema Validator capable of resolving in-schema references."""
+    """Create a jsonschema Validator.
 
+    For validating schema fragments that reference local definitions, inline
+    the root schema's $defs / definitions into the fragment so local $refs
+    resolve without using the deprecated RefResolver.
+    """
     ValidatorClass = validator_for(schema)
     ValidatorClass.check_schema(schema)
-    resolver = RefResolver.from_schema(schema)
-    target_schema = schema_fragment if schema_fragment is not None else schema
-    return ValidatorClass(target_schema, resolver=resolver)
+
+    if schema_fragment is None:
+        return ValidatorClass(schema)
+
+    # Inline root-level definitions into the fragment so "#/$defs/..." refs resolve
+    fragment = dict(schema_fragment)
+    for defs_key in ("$defs", "definitions"):
+        if defs_key in schema:
+            fragment.setdefault(defs_key, schema[defs_key])
+    # Preserve helpful metadata for the fragment validator
+    for meta_key in ("$schema", "$id"):
+        if meta_key in schema:
+            fragment.setdefault(meta_key, schema[meta_key])
+
+    return ValidatorClass(fragment)
 
 
 def _format_error_path(parts: Iterable[Any]) -> str:
