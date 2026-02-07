@@ -1,10 +1,29 @@
-"""Utilities for loading and validating rule JSON Schema and instances."""
+"""Schema validation helpers for rule blocks and documents."""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional, TypedDict
+
+from jsonschema import RefResolver
 from jsonschema.validators import validator_for
 
 DEFAULT_SCHEMA_PATH = Path("config") / "schemas" / "rule_schema.json"
+
+
+class ValidationIssue(TypedDict):
+    """Structured validation error information."""
+
+    path: str
+    message: str
+
+
+class ValidationResult(TypedDict):
+    """Structured validation result returned by the validator helpers."""
+
+    valid: bool
+    errors: List[ValidationIssue]
 
 
 def load_rule_schema(path: Optional[Path] = None) -> Dict[str, Any]:
@@ -15,25 +34,96 @@ def load_rule_schema(path: Optional[Path] = None) -> Dict[str, Any]:
     return json.loads(schema_path.read_text(encoding="utf-8"))
 
 
-def get_schema_validator(schema: Dict[str, Any]) -> Any:
-    """Return a Validator instance for the given schema (auto-detects draft)."""
+def _build_validator(schema: Dict[str, Any], schema_fragment: Optional[Dict[str, Any]] = None):
+    """Create a jsonschema Validator capable of resolving in-schema references."""
+
     ValidatorClass = validator_for(schema)
     ValidatorClass.check_schema(schema)
-    return ValidatorClass(schema)
+    resolver = RefResolver.from_schema(schema)
+    target_schema = schema_fragment if schema_fragment is not None else schema
+    return ValidatorClass(target_schema, resolver=resolver)
 
 
-def validate_instance(instance: Dict[str, Any], schema_path: Optional[Path] = None) -> None:
-    """
-    Validate an instance (full rules document or single rule) against the schema.
-    Raises jsonschema.ValidationError on failure.
-    """
-    schema = load_rule_schema(schema_path)
-    validator = get_schema_validator(schema)
-    validator.validate(instance)
+def _format_error_path(parts: Iterable[Any]) -> str:
+    """Render a jsonschema error path like ['_rules', 0, 'operator'] to "/_rules/0/operator"."""
+
+    rendered = "/" + "/".join(str(part) for part in parts)
+    return rendered if rendered != "//" else "/"
 
 
-def iter_validation_errors(instance: Dict[str, Any], schema_path: Optional[Path] = None):
-    """Return generator of jsonschema.ValidationError for easier reporting in tests/CI."""
-    schema = load_rule_schema(schema_path)
-    validator = get_schema_validator(schema)
+def _format_error(message: str, path_parts: Iterable[Any]) -> ValidationIssue:
+    return {"path": _format_error_path(path_parts), "message": message}
+
+
+def iter_validation_errors(
+    instance: Dict[str, Any],
+    schema: Optional[Dict[str, Any]] = None,
+    schema_path: Optional[Path] = None,
+    schema_fragment: Optional[Dict[str, Any]] = None,
+) -> Iterable[Any]:
+    """Yield jsonschema.ValidationError objects for the given instance."""
+
+    loaded_schema = schema or load_rule_schema(schema_path)
+    validator = _build_validator(loaded_schema, schema_fragment=schema_fragment)
     yield from validator.iter_errors(instance)
+
+
+def _collect_errors(
+    instance: Dict[str, Any],
+    schema: Optional[Dict[str, Any]] = None,
+    schema_path: Optional[Path] = None,
+    schema_fragment: Optional[Dict[str, Any]] = None,
+) -> List[ValidationIssue]:
+    errors: List[ValidationIssue] = []
+    seen = set()
+
+    def _walk(error):
+        if error.context:
+            for sub_error in error.context:
+                yield from _walk(sub_error)
+        yield error
+
+    for error in iter_validation_errors(
+        instance,
+        schema=schema,
+        schema_path=schema_path,
+        schema_fragment=schema_fragment,
+    ):
+        for nested in _walk(error):
+            key = (tuple(nested.absolute_path), nested.message)
+            if key in seen:
+                continue
+            errors.append(_format_error(nested.message, nested.absolute_path))
+            seen.add(key)
+    return errors
+
+
+def validate_rules_document(
+    rules_document: Dict[str, Any],
+    *,
+    schema_path: Optional[Path] = None,
+    schema: Optional[Dict[str, Any]] = None,
+) -> ValidationResult:
+    """Validate the entire allocation rules document against the schema."""
+
+    errors = _collect_errors(rules_document, schema=schema, schema_path=schema_path)
+    return {"valid": len(errors) == 0, "errors": errors}
+
+
+def validate_rule_block(
+    rule_data: Dict[str, Any],
+    *,
+    schema_path: Optional[Path] = None,
+    schema: Optional[Dict[str, Any]] = None,
+) -> ValidationResult:
+    """Validate an individual rule object against the rule item schema."""
+
+    loaded_schema = schema or load_rule_schema(schema_path)
+    rule_schema = loaded_schema["properties"]["_rules"]["items"]
+    errors = _collect_errors(
+        rule_data,
+        schema=loaded_schema,
+        schema_path=schema_path,
+        schema_fragment=rule_schema,
+    )
+    return {"valid": len(errors) == 0, "errors": errors}
