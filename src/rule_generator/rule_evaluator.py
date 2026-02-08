@@ -30,7 +30,11 @@ def _op_equals(field_value: Any, expected: Any) -> bool:
         return True
     if field_value is None or expected is None:
         return False
-    return _normalize_string(field_value).lower() == _normalize_string(expected).lower()
+    field_str = _normalize_string(field_value)
+    expected_str = _normalize_string(expected)
+    if field_str is None or expected_str is None:
+        return False
+    return field_str.lower() == expected_str.lower()
 
 
 def _op_between(field_value: Any, expected: Any) -> bool:
@@ -63,6 +67,8 @@ def _evaluate_condition(condition: Dict[str, Any], transaction: Dict[str, Any]) 
         return False
 
     field_name = condition.get("field")
+    if not isinstance(field_name, str):
+        return False
     field_value = transaction.get(field_name)
     expected_value = condition.get("value")
 
