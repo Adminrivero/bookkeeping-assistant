@@ -132,11 +132,23 @@ def validate_rule_block(
     """Validate an individual rule object against the rule item schema."""
 
     loaded_schema = schema or load_rule_schema(schema_path)
-    rule_schema = loaded_schema["properties"]["_rules"]["items"]
-    errors = _collect_errors(
-        rule_data,
-        schema=loaded_schema,
-        schema_path=schema_path,
-        schema_fragment=rule_schema,
-    )
-    return {"valid": len(errors) == 0, "errors": errors}
+    wrapper = {
+        "_name": "tmp",
+        "_version": "tmp",
+        "_description": "tmp",
+        "_scope": [],
+        "_rules": [rule_data],
+    }
+    errors = _collect_errors(wrapper, schema=loaded_schema, schema_path=schema_path)
+
+    def _strip_wrapper(issue: ValidationIssue) -> ValidationIssue:
+        prefix = "/_rules/0"
+        path = issue["path"]
+        if path.startswith(prefix):
+            new_path = path[len(prefix) :] or "/"
+        else:
+            new_path = path
+        return {"path": new_path, "message": issue["message"]}
+
+    remapped = [_strip_wrapper(issue) for issue in errors]
+    return {"valid": len(remapped) == 0, "errors": remapped}
