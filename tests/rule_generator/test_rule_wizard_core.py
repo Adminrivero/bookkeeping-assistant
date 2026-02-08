@@ -26,10 +26,14 @@ def test_simple_flow_builds_valid_rule_and_dry_run():
     transactions = [_tx(Description="HOME DEPOT", Debit=20.0), _tx(Description="OTHER", Debit=5.0)]
     result = wizard.finalize_rule(validate=True, dry_run_transactions=transactions, expected_matches=[0])
 
+    assert result["validation"] is not None
     assert result["validation"]["valid"] is True
-    assert result["match_report"]["matches"] == [transactions[0]]
-    assert result["match_report"]["false_positives"] == []
-    assert result["match_report"]["false_negatives"] == []
+
+    match_report = result["match_report"]
+    assert match_report is not None
+    assert match_report["matches"] == [transactions[0]]
+    assert match_report["false_positives"] == []
+    assert match_report["false_negatives"] == []
 
     rule = result["rule"]
     assert rule["category_name"] == "Office"
@@ -53,10 +57,14 @@ def test_nested_group_all_logic():
     transactions = [_tx(Description="ESSO CIRCLE K", Debit=50.0), _tx(Description="ESSO", Debit=10.0)]
     result = wizard.finalize_rule(validate=True, dry_run_transactions=transactions, expected_matches=[0])
 
+    assert result["validation"] is not None
     assert result["validation"]["valid"] is True
-    assert result["match_report"]["matches"] == [transactions[0]]
-    assert result["match_report"]["false_positives"] == []
-    assert result["match_report"]["false_negatives"] == []
+    
+    match_report = result["match_report"]
+    assert match_report is not None
+    assert match_report["matches"] == [transactions[0]]
+    assert match_report["false_positives"] == []
+    assert match_report["false_negatives"] == []
 
     rule = result["rule"]
     assert rule["rules"][0]["group_logic"] == "MUST_MATCH_ANY"
