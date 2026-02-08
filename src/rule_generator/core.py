@@ -69,7 +69,7 @@ class RuleWizard:
         cr_letter: Optional[str] = None,
         apply_percentage: Optional[float] = 1.0,
     ) -> None:
-        def _column(name: Optional[str], letter: Optional[str]) -> Optional[Dict[str, str]]:
+        def _column(name: Optional[str], letter: Optional[str]) -> Optional[Dict[str, Optional[str]]]:
             if name is None and letter is None:
                 return None
             return {"name": name, "letter": letter}
