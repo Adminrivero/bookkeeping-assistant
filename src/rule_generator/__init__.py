@@ -1,5 +1,6 @@
 """Exports for the rule generator package."""
 
+from .core import RuleWizard
 from .rule_evaluator import evaluate_rule
 from .rules_io import load_rules, save_rules
 from .schema import (
@@ -21,4 +22,5 @@ __all__ = [
     "load_rules",
     "save_rules",
     "evaluate_rule",
+    "RuleWizard",
 ]
