@@ -1,5 +1,6 @@
 """Exports for the rule generator package."""
 
+from .rule_evaluator import evaluate_rule
 from .rules_io import load_rules, save_rules
 from .schema import (
     ValidationIssue,
@@ -19,4 +20,5 @@ __all__ = [
     "validate_rules_document",
     "load_rules",
     "save_rules",
+    "evaluate_rule",
 ]
