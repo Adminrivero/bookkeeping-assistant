@@ -1,0 +1,36 @@
+[
+  {
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY",
+    "rules": [
+      {"field": "Description", "operator": "CONTAINS", "value": "MISSING CATEGORY"}
+    ]
+  },
+  {
+    "category_name": "Invalid Operator",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY",
+    "rules": [
+      {"field": "Description", "operator": "BAD_OP", "value": "X"}
+    ]
+  },
+  {
+    "category_name": "Rules Not Array",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY",
+    "rules": "not-an-array"
+  },
+  {
+    "category_name": "Missing Rules",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY"
+  },
+  {
+    "category_name": "Wrong Transaction Type",
+    "transaction_type": "UNKNOWN_TYPE",
+    "logic": "MUST_MATCH_ANY",
+    "rules": [
+      {"field": "Description", "operator": "CONTAINS", "value": "X"}
+    ]
+  }
+]

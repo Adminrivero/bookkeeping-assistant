@@ -1,0 +1,12 @@
+[
+  {"Date": "2025-01-01", "Description": "THE HOME DEPOT", "Debit": 120.5, "Credit": 0.0, "Balance": null, "source": "td_visa"},
+  {"Date": "2025-01-02", "Description": "ESSO CIRCLE K", "Debit": 55.25, "Credit": 0.0, "Balance": null, "source": "td_chequing"},
+  {"Date": "2025-01-03", "Description": "TIM HORTONS", "Debit": 9.5, "Credit": 0.0, "Balance": 1020.0, "source": "td_chequing"},
+  {"Date": "2025-01-04", "Description": "ACCT BAL REBATE", "Debit": 0.0, "Credit": 20.0, "Balance": 1040.0, "source": "td_chequing"},
+  {"Date": "2025-01-05", "Description": "SEND E-TFR JOHN", "Debit": 200.0, "Credit": 0.0, "Balance": 840.0, "source": "td_chequing"},
+  {"Date": "2025-01-06", "Description": "E-TRANSFER MARIA", "Debit": 0.0, "Credit": 300.0, "Balance": 1140.0, "source": "td_chequing"},
+  {"Date": "2025-01-07", "Description": "7-ELEVEN STORE", "Debit": 35.0, "Credit": 0.0, "Balance": 1105.0, "source": "td_credit"},
+  {"Date": "2025-01-08", "Description": "COFFEE SHOP", "Debit": 4.25, "Credit": 0.0, "Balance": 1100.75, "source": "td_credit"},
+  {"Date": "2025-01-09", "Description": "MONTHLY ACCOUNT FEE", "Debit": 15.0, "Credit": 0.0, "Balance": 1085.75, "source": "td_chequing"},
+  {"Date": "2025-01-10", "Description": "", "Debit": 0.0, "Credit": 0.0, "Balance": null, "source": "unknown"}
+]
