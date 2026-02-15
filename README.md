@@ -224,7 +224,7 @@ pytest -v
 For detailed guides, see the docs:
 
 - [**Allocation Ruleset Schema**](./docs/allocation_ruleset_schema.md) - Reference guide for defining the JSON-driven classification rules
-- **Rules Creation Wizard** – Guide for defining classification rules (coming-soon)
+- [**Rules Creation Wizard**](./docs/rule_generator/README.md) – Guide for defining classification rules, CLI usage, walkthroughs and developer notes
 - [**PDF Ingestion**](./docs/pdf_ingestion.md) – How to place PDFs in `data/{year}/bank/` and run CLI
 - [**Bank Profiles**](./docs/bank_profiles.md) – How to add new bank configs
 - [**Config Schema**](./docs/config_schema.md) – JSON schema validation rules
