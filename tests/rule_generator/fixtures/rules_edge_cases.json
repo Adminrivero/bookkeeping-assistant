@@ -1,0 +1,49 @@
+[
+  {
+    "category_name": "Empty Rules",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY",
+    "rules": []
+  },
+  {
+    "category_name": "Metadata Only",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY",
+    "rule_id": "metadata-only",
+    "priority": 5,
+    "scope": "td_visa",
+    "rules": [
+      {"field": "Description", "operator": "CONTAINS", "value": "META"}
+    ]
+  },
+  {
+    "category_name": "Null Dual Entry",
+    "transaction_type": "MANUAL_DR",
+    "logic": "MUST_MATCH_ANY",
+    "rules": [
+      {"field": "Description", "operator": "CONTAINS", "value": "TRANSFER"}
+    ],
+    "dual_entry": {
+      "DR_COLUMN": null,
+      "CR_COLUMN": null,
+      "APPLY_PERCENTAGE": 1.0
+    }
+  },
+  {
+    "category_name": "Lower Bound Between",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ALL",
+    "rules": [
+      {"field": "Debit", "operator": "BETWEEN", "value": [0.0, 10.0]}
+    ]
+  },
+  {
+    "category_name": "Scope Comma",
+    "transaction_type": "EXPENSE",
+    "logic": "MUST_MATCH_ANY",
+    "scope": "td_visa,chequing_account",
+    "rules": [
+      {"field": "Description", "operator": "CONTAINS", "value": "SCOPE"}
+    ]
+  }
+]
