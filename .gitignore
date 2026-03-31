@@ -3,15 +3,22 @@ cs50p_venv/
 .vscode/
 .pydebug/
 venv/
+.venv/
 
 # Ignore Python bytecode files
 __pycache__/
 *.pyc
 
-# Ignore business logic files
+# Ignore data and output directories
 data/*
 output/*
 .pydebug/
+
+# Ignore build and distribution directories
+dist/
+build/
+release_bundle/
+*.spec
 
 # Local environment files
 unstaged.txt
